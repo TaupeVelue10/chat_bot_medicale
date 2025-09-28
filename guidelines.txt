@@ -1,0 +1,11 @@
+[Céphalées]
+- Pas d’imagerie si céphalées banales sans red flag.
+- IRM recommandée si céphalées persistantes + signes neurologiques.
+
+[Douleurs abdominales]
+- Échographie en première intention si suspicion de pathologie gynécologique ou biliaire.
+- Scanner abdo en urgence si suspicion d’appendicite compliquée.
+
+[Troubles de la marche]
+- IRM cérébrale si signes neurologiques associés.
+- Scanner rachis lombaire si suspicion canal lombaire étroit.
