@@ -1,0 +1,44 @@
+[
+  {
+    "id": "ceph_1",
+    "motif": "cephalees",
+    "texte": "Pas d’imagerie si céphalée primaire (migraine, céphalée de tension) sans signe d’alarme. Imagerie indiquée si red flags : céphalée brutale en coup de tonnerre, déficit neurologique, fièvre, immunodépression, cancer, VIH, âge >50 ans, grossesse/post-partum, changement de pattern. IRM en première intention si état stable, scanner urgent si instabilité ou trouble de conscience.",
+    "source": "HAS / SFETD, 2024"
+  },
+  {
+    "id": "ceph_2",
+    "motif": "cephalees",
+    "texte": "En cas de céphalée brutale avec déficit neurologique : scanner cérébral sans injection immédiat ± angioscanner si hémorragie sous-arachnoïdienne suspectée.",
+    "source": "HAS / Urgences, 2024"
+  },
+  {
+    "id": "abd_1",
+    "motif": "abdomen",
+    "texte": "L’ASP (abdominal sans préparation) n’est généralement pas indiqué pour les douleurs abdominales. Préférer l’échographie ou le scanner selon le contexte.",
+    "source": "HAS Guide bon usage"
+  },
+  {
+    "id": "abd_2",
+    "motif": "abdomen",
+    "texte": "Douleur abdominale avec suspicion d’anévrisme de l’aorte abdominale (AAA) : échographie en première intention, scanner si doute diagnostique ou gravité.",
+    "source": "HAS GBU, 2024"
+  },
+  {
+    "id": "abd_3",
+    "motif": "abdomen",
+    "texte": "Suspicion de pathologie biliaire : échographie en première intention.",
+    "source": "HAS GBU, 2024"
+  },
+  {
+    "id": "marche_1",
+    "motif": "marche",
+    "texte": "Pas d’imagerie systématique pour les chutes répétées ou troubles de la marche. L’imagerie est guidée par la clinique et les signes associés.",
+    "source": "HAS, Troubles de la marche"
+  },
+  {
+    "id": "marche_2",
+    "motif": "marche",
+    "texte": "Test Timed Up & Go ≥ 20 secondes = anomalie, nécessitant évaluation complémentaire. Imagerie si signes focaux, suspicion lésionnelle ou traumatisme.",
+    "source": "HAS, Chutes sujet âgé"
+  }
+]

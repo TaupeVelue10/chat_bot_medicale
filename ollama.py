@@ -18,7 +18,15 @@ def rag_query(user_input, collection):
         query_texts=[user_input],
         n_results=3
     )
-    context = "\n".join(results["documents"][0])
+
+    docs = results["documents"][0]
+    metas = results.get("metadatas", [[]])[0]  # safe fallback
+
+    context = "\n".join(
+        f"- {doc} (source: {meta.get('source', 'inconnue')}, motif: {meta.get('motif', 'inconnu')})"
+        if isinstance(meta, dict) else f"- {doc}"
+        for doc, meta in zip(docs, metas)
+    )
 
     prompt = f"""
     Tu es un assistant médical.
@@ -29,3 +37,5 @@ def rag_query(user_input, collection):
     """
 
     return query_ollama(prompt)
+
+
