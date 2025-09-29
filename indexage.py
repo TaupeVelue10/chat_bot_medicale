@@ -3,7 +3,14 @@ import json
 
 def create_index(guidelines_file="guidelines.json", db_path="rag_db", collection_name="imagerie"):
     chroma_client = chromadb.PersistentClient(path=db_path)
-    collection = chroma_client.get_or_create_collection(collection_name)
+    
+    # Recréer la collection proprement à chaque fois
+    try:
+        chroma_client.delete_collection(collection_name)
+    except:
+        pass  # La collection n'existe pas encore
+    
+    collection = chroma_client.create_collection(collection_name)
 
     docs = []
     with open(guidelines_file, "r") as f:
@@ -23,12 +30,5 @@ def create_index(guidelines_file="guidelines.json", db_path="rag_db", collection
         metadatas=[{"motif": d["motif"], "source": d["source"]} for d in docs]
     )
 
-    print(f"✅ Indexation terminée ({len(docs)} documents).")
     return collection
-
-docs = []
-with open("guidelines.txt", "r") as f:
-    for i, line in enumerate(f):
-        if line.strip():
-            docs.append({"id": str(i), "text": line.strip()})
 
