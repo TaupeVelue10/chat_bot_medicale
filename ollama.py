@@ -14,67 +14,68 @@ def query_ollama(prompt, model="mistral"):
     return response.json()["response"]
 
 def analyze_missing_info(user_input, model="mistral"):
-    """Analyse la question pour identifier les informations manquantes importantes"""
-    analysis_prompt = f"""
-    Analyse cette question médicale et identifie les informations importantes qui pourraient manquer pour donner une recommandation d'imagerie appropriée.
-
-    Question : {user_input}
-
-    Évalue si ces informations essentielles sont présentes ou manquantes :
-    - Âge du patient (important pour les céphalées >50 ans, contexte gériatrique)
-    - Signes d'alarme ou "red flags" (céphalée brutale, déficit neurologique, fièvre, etc.)
-    - Durée/évolution des symptômes
-    - Antécédents médicaux pertinents (cancer, immunodépression, VIH)
-    - Contexte (grossesse, post-partum, traumatisme)
-    - Examen clinique (signes focaux, état de conscience)
-
-    Réponds UNIQUEMENT par :
-    - "COMPLET" si les informations essentielles sont présentes
-    - "MANQUANT: [liste des informations importantes manquantes]" si des éléments cruciaux manquent
-
-    Exemple : "MANQUANT: âge du patient, présence de signes d'alarme"
-    """
+    """Analyse progressive : vérifie étape par étape"""
+    text = user_input.lower()
     
-    response = query_ollama(analysis_prompt, model)
-    return response.strip()
+    # Vérifications progressives
+    has_age = any(word in text for word in ['ans', 'âge', 'age', 'années'])
+    has_symptom_duration = any(word in text for word in ['depuis', 'jour', 'semaine', 'mois'])
+    has_red_flags_mentioned = any(word in text for word in ['déficit', 'neurologique', 'fièvre', 'brutale', 'coup de tonnerre', 'pas de', 'sans', 'aucun'])
+    has_symptom_type = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'douleur'])
+    
+    # Critères pour avoir suffisamment d'informations
+    # Il faut : âge + (signes d'alarme mentionnés OU durée)
+    if has_age and has_red_flags_mentioned and has_symptom_duration:
+        return "COMPLET"
+    elif has_age and has_red_flags_mentioned:
+        return "COMPLET"
+    elif has_age and has_symptom_duration and len(text.split()) > 10:
+        return "COMPLET"
+    
+    # Priorité des informations manquantes
+    if not has_age:
+        return "MANQUANT: âge"
+    elif has_symptom_type and not has_red_flags_mentioned:
+        return "MANQUANT: signes d'alarme"
+    elif has_symptom_type and not has_symptom_duration:
+        return "MANQUANT: durée"
+    else:
+        return "COMPLET"
 
 def generate_clarifying_questions(missing_info, user_input):
-    """Génère des questions de clarification basées sur les informations manquantes"""
-    questions_prompt = f"""
-    Génère 2-3 questions de clarification précises et médicalement pertinentes pour obtenir les informations manquantes suivantes : {missing_info}
-
-    Question originale : {user_input}
-
-    Format les questions de manière claire et directe, une par ligne, en commençant par "- ".
-    Concentre-toi sur les éléments les plus critiques pour la décision d'imagerie.
-    """
+    """Génère une question ciblée selon ce qui manque"""
+    text = user_input.lower()
     
-    return query_ollama(questions_prompt)
+    # Questions progressives selon la priorité
+    if 'âge' in missing_info.lower():
+        return "Quel âge a le patient ?"
+    elif 'signes d\'alarme' in missing_info.lower() or 'alarme' in missing_info.lower():
+        return "Y a-t-il des signes d'alarme : céphalée brutale, déficit neurologique, fièvre ?"
+    elif 'durée' in missing_info.lower():
+        return "Depuis combien de temps ces symptômes évoluent-ils ?"
+    elif any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête']):
+        return "Y a-t-il des signes d'alarme (céphalée brutale, déficit neurologique, fièvre) ?"
+    else:
+        return "Pouvez-vous préciser les signes cliniques ?"
 
 def rag_query_interactive(user_input, collection):
     """Version interactive qui retourne aussi si plus d'infos sont nécessaires"""
     # Étape 1 : Analyser si des informations importantes manquent
     analysis = analyze_missing_info(user_input)
     
-    # Vérifier plusieurs formats possibles de réponse (robuste)
-    if any(keyword in analysis.upper() for keyword in ["MANQUANT", "MANQUE", "MISSING", "INSUFFISANT"]):
+    # Vérifier si des informations manquent
+    if "COMPLET" not in analysis.upper():
         # Extraire les informations manquantes
         if "MANQUANT:" in analysis:
             missing_info = analysis.split("MANQUANT:", 1)[1].strip()
         elif "MANQUANT " in analysis:
             missing_info = analysis.split("MANQUANT ", 1)[1].strip()
         else:
-            missing_info = analysis
+            missing_info = "informations cliniques"
             
         questions = generate_clarifying_questions(missing_info, user_input)
         
-        response = f"""Pour vous donner une recommandation précise, j'aurais besoin de quelques informations supplémentaires :
-
-{questions}
-
-Ces détails m'aideront à appliquer les bonnes guidelines d'imagerie."""
-        
-        return response, True  # True = a besoin de plus d'infos
+        return questions.strip(), True  # True = a besoin de plus d'infos
     
     # Étape 2 : Si les informations sont complètes, procéder à la requête RAG normale
     results = collection.query(
@@ -116,5 +117,3 @@ def rag_query(user_input, collection):
     """Version simple pour compatibilité"""
     response, _ = rag_query_interactive(user_input, collection)
     return response
-
-
