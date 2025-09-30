@@ -12,6 +12,31 @@
     "source": "HAS / Urgences, 2024"
   },
   {
+    "id": "ceph_3",
+    "motif": "cephalees",
+    "texte": "Céphalée chronique quotidienne atypique ou résistante au traitement : IRM cérébrale pour éliminer une cause secondaire.",
+    "source": "HAS, 2023"
+  },
+  {
+    "id": "ceph_4",
+    "motif": "cephalees",
+    "texte": "Chez l’enfant : imagerie uniquement si signes neurologiques, augmentation de la pression intracrânienne, modification du comportement ou céphalée inhabituelle.",
+    "source": "HAS Pédiatrie, 2023"
+  },
+  {
+    "id": "ceph_5",
+    "motif": "cephalees",
+    "texte": "Névralgie du trijumeau typique : pas d’imagerie systématique. IRM indiquée si présentation atypique (âge jeune, déficit neurologique associé, douleur bilatérale).",
+    "source": "HAS Neurologie, 2023"
+  },
+  {
+    "id": "ceph_6",
+    "motif": "cephalees",
+    "texte": "Céphalée sinusienne compliquée (fièvre, œdème orbitaire, douleurs persistantes) : scanner des sinus recommandé.",
+    "source": "HAS ORL, 2023"
+  },
+
+  {
     "id": "abd_1",
     "motif": "abdomen",
     "texte": "L’ASP (abdominal sans préparation) n’est généralement pas indiqué pour les douleurs abdominales. Préférer l’échographie ou le scanner selon le contexte.",
@@ -30,6 +55,37 @@
     "source": "HAS GBU, 2024"
   },
   {
+    "id": "abd_4",
+    "motif": "abdomen",
+    "texte": "Douleur abdominale avec suspicion d’appendicite : échographie en première intention, scanner abdomino-pelvien injecté si doute.",
+    "source": "HAS, 2023"
+  },
+  {
+    "id": "abd_5",
+    "motif": "abdomen",
+    "texte": "Colique néphrétique : scanner abdomino-pelvien sans injection recommandé, échographie en alternative chez la femme enceinte.",
+    "source": "HAS Urologie, 2023"
+  },
+  {
+    "id": "abd_6",
+    "motif": "abdomen",
+    "texte": "Suspicion de diverticulite : scanner abdomino-pelvien avec injection recommandé en première intention.",
+    "source": "HAS Gastro-entérologie, 2023"
+  },
+  {
+    "id": "abd_7",
+    "motif": "abdomen",
+    "texte": "Suspicion d’occlusion intestinale : scanner abdomino-pelvien injecté recommandé.",
+    "source": "HAS Urgences, 2023"
+  },
+  {
+    "id": "abd_8",
+    "motif": "abdomen",
+    "texte": "Douleur abdominale évocatrice de gastro-entérite aiguë non compliquée : pas d’imagerie.",
+    "source": "HAS, 2023"
+  },
+
+  {
     "id": "marche_1",
     "motif": "marche",
     "texte": "Pas d’imagerie systématique pour les chutes répétées ou troubles de la marche. L’imagerie est guidée par la clinique et les signes associés.",
@@ -40,5 +96,17 @@
     "motif": "marche",
     "texte": "Test Timed Up & Go ≥ 20 secondes = anomalie, nécessitant évaluation complémentaire. Imagerie si signes focaux, suspicion lésionnelle ou traumatisme.",
     "source": "HAS, Chutes sujet âgé"
+  },
+  {
+    "id": "marche_3",
+    "motif": "marche",
+    "texte": "Suspicion d’hydrocéphalie à pression normale (triade : troubles de la marche, troubles cognitifs, troubles urinaires) : IRM cérébrale recommandée.",
+    "source": "HAS Neurologie, 2023"
+  },
+  {
+    "id": "marche_4",
+    "motif": "marche",
+    "texte": "Troubles de la marche progressifs avec suspicion de sclérose en plaques : IRM cérébrale et médullaire indiquée.",
+    "source": "HAS Neurologie, 2023"
   }
 ]

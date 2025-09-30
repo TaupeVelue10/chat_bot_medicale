@@ -5,7 +5,7 @@ def get_collection(db_path="rag_db", collection_name="imagerie"):
     chroma_client = chromadb.PersistentClient(path=db_path)
     return chroma_client.get_collection(collection_name)
 
-def query_ollama(prompt, model="mistral"):
+def query_ollama(prompt, model="biomistral"):
     response = requests.post("http://localhost:11434/api/generate", json={
         "model": model,
         "prompt": prompt,
@@ -14,47 +14,152 @@ def query_ollama(prompt, model="mistral"):
     return response.json()["response"]
 
 def analyze_missing_info(user_input, model="mistral"):
-    """Analyse progressive : vérifie étape par étape"""
+    """Analyse progressive spécifique par pathologie"""
     text = user_input.lower()
     
-    # Vérifications progressives
+    # Identifier le type de pathologie (recherche étendue pour capturer toutes les mentions)
+    is_headache = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'céphalées', 'migraine', 'céphalique'])
+    is_abdominal = any(word in text for word in ['abdomen', 'ventre', 'abdominal', 'douleur abdominale', 'mal de ventre', 'maux de ventre', 'abdominale'])
+    is_walking = any(word in text for word in ['marche', 'chute', 'trouble de la marche', 'équilibre', 'instabilité', 'troubles de la marche', 'chutes', 'démarche', 'mobilité'])
+    
+    # Déterminer la pathologie principale (priorité selon l'ordre de spécificité)
+    main_pathology = None
+    if is_walking:
+        main_pathology = "walking"
+    elif is_headache:
+        main_pathology = "headache"  
+    elif is_abdominal:
+        main_pathology = "abdominal"
+    
+    # Vérifications générales
     has_age = any(word in text for word in ['ans', 'âge', 'age', 'années'])
-    has_symptom_duration = any(word in text for word in ['depuis', 'jour', 'semaine', 'mois'])
-    has_red_flags_mentioned = any(word in text for word in ['déficit', 'neurologique', 'fièvre', 'brutale', 'coup de tonnerre', 'pas de', 'sans', 'aucun'])
-    has_symptom_type = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'douleur'])
+    has_duration = any(word in text for word in ['depuis', 'jour', 'semaine', 'mois'])
     
-    # Critères pour avoir suffisamment d'informations
-    # Il faut : âge + (signes d'alarme mentionnés OU durée)
-    if has_age and has_red_flags_mentioned and has_symptom_duration:
-        return "COMPLET"
-    elif has_age and has_red_flags_mentioned:
-        return "COMPLET"
-    elif has_age and has_symptom_duration and len(text.split()) > 10:
-        return "COMPLET"
+    # CÉPHALÉES - Informations critiques spécifiques
+    if main_pathology == "headache":
+        # Détecter les signes d'alarme présents OU explicitement absents
+        headache_red_flags = any(word in text for word in [
+            'brutale', 'coup de tonnerre', 'déficit', 'neurologique', 'fièvre', 
+            'immunodépression', 'cancer', 'vih', 'grossesse', 'post-partum', 
+            'changement', 'pattern'
+        ])
+        # Détecter les négations (informations données mais négatives)
+        has_negations = any(phrase in text for phrase in [
+            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
+        ])
+        
+        # Détecter âge >50 ans (critère important pour céphalées)
+        age_numbers = [word for word in text.split() if word.isdigit()]
+        age_over_50 = any(int(num) >= 50 for num in age_numbers if num.isdigit())
+        
+        if not has_age:
+            return "MANQUANT: âge"
+        elif not headache_red_flags and not has_negations:
+            return "MANQUANT: signes d'alarme céphalées"
+        elif age_over_50 and not has_duration:
+            return "MANQUANT: durée"
+        else:
+            return "COMPLET"
     
-    # Priorité des informations manquantes
-    if not has_age:
-        return "MANQUANT: âge"
-    elif has_symptom_type and not has_red_flags_mentioned:
-        return "MANQUANT: signes d'alarme"
-    elif has_symptom_type and not has_symptom_duration:
-        return "MANQUANT: durée"
+    # DOULEURS ABDOMINALES - Informations critiques spécifiques
+    elif main_pathology == "abdominal":
+        # Signes abdominaux présents
+        abdominal_signs = any(word in text for word in [
+            'anévrisme', 'aaa', 'aorte', 'biliaire', 'vésicule', 
+            'fièvre', 'défense', 'contracture', 'signes péritonéaux'
+        ])
+        # Négations pour signes abdominaux
+        has_negations = any(phrase in text for phrase in [
+            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
+        ])
+        
+        if not has_age:
+            return "MANQUANT: âge"
+        elif not abdominal_signs and not has_negations:
+            return "MANQUANT: signes cliniques abdominaux"
+        elif not has_duration:
+            return "MANQUANT: durée"
+        else:
+            return "COMPLET"
+    
+    # TROUBLES DE LA MARCHE - Informations critiques spécifiques
+    elif main_pathology == "walking":
+        # Signes de marche présents
+        walking_signs = any(word in text for word in [
+            'timed up', 'go', 'secondes', 'focaux', 'signes focaux', 
+            'lésion', 'traumatisme', 'chutes répétées'
+        ])
+        # Négations pour troubles de marche
+        has_negations = any(phrase in text for phrase in [
+            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
+        ])
+        
+        if not has_age:
+            return "MANQUANT: âge"
+        elif not walking_signs and not has_negations:
+            return "MANQUANT: évaluation fonctionnelle"
+        else:
+            return "COMPLET"
+    
+    # CAS GÉNÉRAL (pathologie non identifiée clairement)
     else:
-        return "COMPLET"
+        # Signes généraux présents
+        general_signs = any(word in text for word in [
+            'déficit', 'neurologique', 'fièvre', 'brutale', 'signes focaux'
+        ])
+        # Négations générales
+        has_negations = any(phrase in text for phrase in [
+            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
+        ])
+        
+        if not has_age:
+            return "MANQUANT: âge"
+        elif not general_signs and not has_negations:
+            return "MANQUANT: signes cliniques"
+        else:
+            return "COMPLET"
 
 def generate_clarifying_questions(missing_info, user_input):
-    """Génère une question ciblée selon ce qui manque"""
+    """Génère une question ciblée selon la pathologie et ce qui manque"""
     text = user_input.lower()
     
-    # Questions progressives selon la priorité
+    # Identifier le type de pathologie
+    is_headache = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'céphalées'])
+    is_abdominal = any(word in text for word in ['abdomen', 'ventre', 'abdominal', 'douleur abdominale', 'mal de ventre', 'maux de ventre'])
+    is_walking = any(word in text for word in ['marche', 'chute', 'trouble de la marche', 'équilibre'])
+    
+    # Questions selon ce qui manque
     if 'âge' in missing_info.lower():
         return "Quel âge a le patient ?"
-    elif 'signes d\'alarme' in missing_info.lower() or 'alarme' in missing_info.lower():
-        return "Y a-t-il des signes d'alarme : céphalée brutale, déficit neurologique, fièvre ?"
+    
+    # CÉPHALÉES - Questions spécifiques
+    elif 'signes d\'alarme céphalées' in missing_info.lower():
+        return "Y a-t-il des signes d'alarme : céphalée brutale en coup de tonnerre, déficit neurologique, fièvre, immunodépression, cancer ?"
+    
+    # DOULEURS ABDOMINALES - Questions spécifiques  
+    elif 'signes cliniques abdominaux' in missing_info.lower():
+        return "Y a-t-il des signes de gravité : suspicion d'anévrisme aorte abdominale, signes biliaires, défense abdominale ?"
+    
+    # TROUBLES DE LA MARCHE - Questions spécifiques
+    elif 'évaluation fonctionnelle' in missing_info.lower():
+        return "Y a-t-il des signes focaux, un test Timed Up & Go >20 secondes, ou des chutes répétées ?"
+    
+    # Questions génériques selon durée
     elif 'durée' in missing_info.lower():
-        return "Depuis combien de temps ces symptômes évoluent-ils ?"
-    elif any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête']):
-        return "Y a-t-il des signes d'alarme (céphalée brutale, déficit neurologique, fièvre) ?"
+        if is_headache:
+            return "Depuis combien de temps ces céphalées évoluent-elles ?"
+        elif is_abdominal:
+            return "Depuis combien de temps ces douleurs abdominales évoluent-elles ?"
+        else:
+            return "Depuis combien de temps ces symptômes évoluent-ils ?"
+    
+    # Questions génériques selon pathologie
+    elif is_headache:
+        return "Y a-t-il des signes d'alarme neurologiques ?"
+    elif is_abdominal:
+        return "Y a-t-il des signes de gravité abdominale ?"
+    elif is_walking:
+        return "Y a-t-il des signes focaux ou troubles de l'équilibre ?"
     else:
         return "Pouvez-vous préciser les signes cliniques ?"
 
