@@ -42,16 +42,16 @@ def chat_interactif(collection):
 
 def main():
     """Fonction principale - évite les problèmes de cache et d'état"""
-    # Étape 1 : Indexer guidelines (création ou mise à jour)
+    # Indexer guidelines 
     create_index("guidelines.json")
     
-    # Étape 2 : Charger la collection
+    # Charger la collection
     collection = get_collection()
     
-    # Lancement direct du mode interactif
+    # Lancement du mode interactif
     chat_interactif(collection)
 
-# Point d'entrée unique
+
 if __name__ == "__main__":
     main()
 

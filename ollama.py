@@ -5,6 +5,7 @@ def get_collection(db_path="rag_db", collection_name="imagerie"):
     chroma_client = chromadb.PersistentClient(path=db_path)
     return chroma_client.get_collection(collection_name)
 
+# interroge biomistral a partir de ollama
 def query_ollama(prompt, model="biomistral"):
     response = requests.post("http://localhost:11434/api/generate", json={
         "model": model,
@@ -13,14 +14,18 @@ def query_ollama(prompt, model="biomistral"):
     })
     return response.json()["response"]
 
+# fonction qui permet de déterminer les informations manquantes
 def analyze_missing_info(user_input, model="mistral"):
     """Analyse progressive spécifique par pathologie"""
     text = user_input.lower()
     
-    # Identifier le type de pathologie (recherche étendue pour capturer toutes les mentions)
+        # Identifier le type de pathologie (manque une)
     is_headache = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'céphalées', 'migraine', 'céphalique'])
     is_abdominal = any(word in text for word in ['abdomen', 'ventre', 'abdominal', 'douleur abdominale', 'mal de ventre', 'maux de ventre', 'abdominale'])
     is_walking = any(word in text for word in ['marche', 'chute', 'trouble de la marche', 'équilibre', 'instabilité', 'troubles de la marche', 'chutes', 'démarche', 'mobilité'])
+    
+    # Identifier les symptômes neurologiques généraux
+    is_neurological = any(word in text for word in ['parésthésie', 'parésthésies', 'engourdissement', 'fourmillement', 'picotement', 'déficit moteur', 'faiblesse', 'paralysie', 'hémiplégie', 'trouble sensitif'])
     
     # Déterminer la pathologie principale (priorité selon l'ordre de spécificité)
     main_pathology = None
@@ -30,22 +35,22 @@ def analyze_missing_info(user_input, model="mistral"):
         main_pathology = "headache"  
     elif is_abdominal:
         main_pathology = "abdominal"
-    
-    # Vérifications générales
+    elif is_neurological:
+        main_pathology = "neurological"    # Vérifications générales
     has_age = any(word in text for word in ['ans', 'âge', 'age', 'années'])
-    has_duration = any(word in text for word in ['depuis', 'jour', 'semaine', 'mois'])
+    has_duration = any(word in text for word in ['depuis', 'jour', 'semaine', 'mois']) # probléme si c'est en année ça ne reconnait pas
     
-    # CÉPHALÉES - Informations critiques spécifiques
+    # CÉPHALÉES 
     if main_pathology == "headache":
-        # Détecter les signes d'alarme présents OU explicitement absents
+        # Détecter les redflags présents OU explicitement absents
         headache_red_flags = any(word in text for word in [
             'brutale', 'coup de tonnerre', 'déficit', 'neurologique', 'fièvre', 
             'immunodépression', 'cancer', 'vih', 'grossesse', 'post-partum', 
             'changement', 'pattern'
         ])
-        # Détecter les négations (informations données mais négatives)
+        # Détecter les négations 
         has_negations = any(phrase in text for phrase in [
-            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
+            'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif', "absence d' "
         ])
         
         # Détecter âge >50 ans (critère important pour céphalées)
@@ -61,11 +66,11 @@ def analyze_missing_info(user_input, model="mistral"):
         else:
             return "COMPLET"
     
-    # DOULEURS ABDOMINALES - Informations critiques spécifiques
+    # DOULEURS ABDOMINALES 
     elif main_pathology == "abdominal":
         # Signes abdominaux présents
         abdominal_signs = any(word in text for word in [
-            'anévrisme', 'aaa', 'aorte', 'biliaire', 'vésicule', 
+            'anévrisme', 'aorte', 'biliaire', 'vésicule', 
             'fièvre', 'défense', 'contracture', 'signes péritonéaux'
         ])
         # Négations pour signes abdominaux
@@ -82,7 +87,7 @@ def analyze_missing_info(user_input, model="mistral"):
         else:
             return "COMPLET"
     
-    # TROUBLES DE LA MARCHE - Informations critiques spécifiques
+    # TROUBLES DE LA MARCHE 
     elif main_pathology == "walking":
         # Signes de marche présents
         walking_signs = any(word in text for word in [
@@ -101,23 +106,34 @@ def analyze_missing_info(user_input, model="mistral"):
         else:
             return "COMPLET"
     
-    # CAS GÉNÉRAL (pathologie non identifiée clairement)
-    else:
-        # Signes généraux présents
-        general_signs = any(word in text for word in [
-            'déficit', 'neurologique', 'fièvre', 'brutale', 'signes focaux'
+    # SYMPTÔMES NEUROLOGIQUES 
+    elif main_pathology == "neurological":
+        # Signes neurologiques focaux ou systémiques
+        neuro_signs = any(word in text for word in [
+            'focal', 'focaux', 'déficit moteur', 'déficit sensitif', 'unilatéral', 
+            'bilatéral', 'membre', 'face', 'depuis', 'brutal', 'progressif'
         ])
-        # Négations générales
+        # Négations pour signes neurologiques
         has_negations = any(phrase in text for phrase in [
             'pas de', 'sans', 'aucun', 'absence de', 'non', 'négatif'
         ])
         
         if not has_age:
             return "MANQUANT: âge"
-        elif not general_signs and not has_negations:
-            return "MANQUANT: signes cliniques"
+        elif not neuro_signs and not has_negations and not has_duration:
+            return "MANQUANT: caractéristiques neurologiques"
         else:
             return "COMPLET"
+    
+    # CAS GÉNÉRAL (pathologie non identifiée clairement)
+    else:
+        # Si on a au moins 5 mots et un âge, considérer comme suffisant
+        if has_age and len(text.split()) >= 5:
+            return "COMPLET"
+        elif not has_age:
+            return "MANQUANT: âge"
+        else:
+            return "MANQUANT: description clinique"
 
 def generate_clarifying_questions(missing_info, user_input):
     """Génère une question ciblée selon la pathologie et ce qui manque"""
@@ -127,6 +143,7 @@ def generate_clarifying_questions(missing_info, user_input):
     is_headache = any(word in text for word in ['céphalée', 'mal de tête', 'maux de tête', 'céphalées'])
     is_abdominal = any(word in text for word in ['abdomen', 'ventre', 'abdominal', 'douleur abdominale', 'mal de ventre', 'maux de ventre'])
     is_walking = any(word in text for word in ['marche', 'chute', 'trouble de la marche', 'équilibre'])
+    is_neurological = any(word in text for word in ['parésthésie', 'parésthésies', 'engourdissement', 'fourmillement', 'déficit', 'neurologique'])
     
     # Questions selon ce qui manque
     if 'âge' in missing_info.lower():
@@ -144,6 +161,10 @@ def generate_clarifying_questions(missing_info, user_input):
     elif 'évaluation fonctionnelle' in missing_info.lower():
         return "Y a-t-il des signes focaux, un test Timed Up & Go >20 secondes, ou des chutes répétées ?"
     
+    # SYMPTÔMES NEUROLOGIQUES - Questions spécifiques
+    elif 'caractéristiques neurologiques' in missing_info.lower():
+        return "Les symptômes sont-ils focaux/unilatéraux, depuis quand, évolution brutale ou progressive ?"
+    
     # Questions génériques selon durée
     elif 'durée' in missing_info.lower():
         if is_headache:
@@ -160,8 +181,78 @@ def generate_clarifying_questions(missing_info, user_input):
         return "Y a-t-il des signes de gravité abdominale ?"
     elif is_walking:
         return "Y a-t-il des signes focaux ou troubles de l'équilibre ?"
+    elif is_neurological:
+        return "Les symptômes neurologiques sont-ils focaux, depuis quand évoluent-ils ?"
     else:
-        return "Pouvez-vous préciser les signes cliniques ?"
+        return "Pouvez-vous préciser la localisation et l'évolution des symptômes ?"
+
+def generate_imaging_recommendation(user_input, guidelines):
+    """Génère une recommandation d'imagerie basée sur des règles simples"""
+    text = user_input.lower()
+    
+    # Extraire l'âge
+    age_numbers = [int(word) for word in user_input.split() if word.isdigit()]
+    age = age_numbers[0] if age_numbers else 0
+    
+    # PRIORITÉ ABSOLUE : Signes d'alarme majeurs (même s'il y a des négations ailleurs)
+    has_neuro_deficit = any(phrase in text for phrase in ['déficit neurologique', 'déficit neurologique', 'deficit neurologique']) and 'pas de déficit' not in text
+    has_fever = 'fièvre' in text and 'pas de fièvre' not in text
+    has_brutal = any(word in text for word in ['brutale', 'coup de tonnerre'])
+    
+    # Si signes d'alarme majeurs présents → IMAGERIE URGENTE
+    if has_neuro_deficit or has_brutal or has_fever:
+        return "IMAGERIE INDIQUÉE : Scanner cérébral - Signes d'alarme majeurs (déficit neurologique/céphalée brutale/fièvre)"
+    
+    # Négations explicites
+    no_red_flags = any(phrase in text for phrase in [
+        'pas de fièvre', 'pas de déficit', 'sans fièvre', 'sans déficit', 
+        'aucun signe', 'pas de signe'
+    ])
+    
+    # Détection des autres signes d'alarme
+    other_red_flags = any(word in text for word in [
+        'immunodépression', 'cancer', 'vih', 'grossesse', 'post-partum', 'changement'
+    ])
+    
+    # CÉPHALÉES
+    if any(word in text for word in ['céphalée', 'céphalées', 'mal de tête', 'maux de tête']):
+        if other_red_flags:
+            return "IMAGERIE INDIQUÉE : Scanner cérébral - Présence de signes d'alarme (immunodépression/cancer/grossesse)"
+        elif age > 50:
+            return "IMAGERIE INDIQUÉE : IRM cérébrale - Patient >50 ans selon guidelines HAS/SFETD"
+        elif no_red_flags:
+            return "AUCUNE IMAGERIE : Céphalée primaire sans signe d'alarme selon HAS/SFETD"
+        else:
+            return "IMAGERIE INDIQUÉE : IRM cérébrale - Évaluation nécessaire selon guidelines"
+    
+    # DOULEURS ABDOMINALES  
+    elif any(word in text for word in ['abdomen', 'ventre', 'abdominal']):
+        # Signes de gravité abdominale urgents (vérifier négations)
+        has_defense = any(word in text for word in ['défense', 'defense', 'contracture', 'péritonéal']) and not any(phrase in text for phrase in ['pas de défense', 'sans défense', 'pas de contracture'])
+        has_aaa_signs = any(word in text for word in ['anévrisme', 'aaa', 'aorte'])
+        has_biliary_signs = any(word in text for word in ['biliaire', 'vésicule', 'cholécystite'])
+        
+        if has_defense:
+            return "IMAGERIE INDIQUÉE : Scanner abdominal - Défense abdominale (suspicion péritonite)"
+        elif has_aaa_signs:
+            return "IMAGERIE INDIQUÉE : Échographie puis scanner si doute - Suspicion AAA selon HAS"
+        elif has_biliary_signs:
+            return "IMAGERIE INDIQUÉE : Échographie abdominale - Pathologie biliaire selon HAS"
+        elif 'fièvre' in text:
+            return "IMAGERIE INDIQUÉE : Scanner abdominal - Douleur abdominale fébrile"
+        else:
+            return "IMAGERIE INDIQUÉE : Échographie abdominale - Évaluation douleur abdominale"
+    
+    # TROUBLES DE LA MARCHE
+    elif any(word in text for word in ['marche', 'chute', 'équilibre']):
+        if any(word in text for word in ['focaux', 'signes focaux', 'lésion']):
+            return "IMAGERIE INDIQUÉE : IRM selon signes focaux - Guidelines HAS troubles marche"
+        else:
+            return "AUCUNE IMAGERIE : Pas d'imagerie systématique pour troubles marche selon HAS"
+    
+    # CAS GÉNÉRAL
+    else:
+        return "ÉVALUATION CLINIQUE : Imagerie selon guidelines spécifiques à la pathologie"
 
 def rag_query_interactive(user_input, collection):
     """Version interactive qui retourne aussi si plus d'infos sont nécessaires"""
@@ -182,41 +273,19 @@ def rag_query_interactive(user_input, collection):
         
         return questions.strip(), True  # True = a besoin de plus d'infos
     
-    # Étape 2 : Si les informations sont complètes, procéder à la requête RAG normale
+    # Étape 2 : Générer une recommandation basée sur des règles simples
     results = collection.query(
         query_texts=[user_input],
         n_results=3
     )
 
     docs = results["documents"][0]
-    metas = results.get("metadatas", [[]])[0]  # safe fallback
+    metas = results.get("metadatas", [[]])[0]
 
-    context = "\n".join(
-        f"- {doc} (source: {meta.get('source', 'inconnue')}, motif: {meta.get('motif', 'inconnu')})"
-        if isinstance(meta, dict) else f"- {doc}"
-        for doc, meta in zip(docs, metas)
-    )
-
-    prompt = f"""
-    Tu es un assistant médical expert en recommandations d'imagerie.
+    # Utiliser la logique déterministe au lieu d'Ollama
+    recommendation = generate_imaging_recommendation(user_input, docs)
     
-    Cas clinique complet : {user_input}
-    
-    Recommandations officielles pertinentes :
-    {context}
-    
-    INSTRUCTIONS :
-    1. Analyse le cas clinique en fonction des guidelines
-    2. Fournis une recommandation claire et justifiée
-    3. Indique l'examen d'imagerie approprié (ou absence d'indication)
-    4. Mentionne les critères de décision utilisés
-    5. Sois concis et pratique
-    
-    Format ta réponse de manière structurée et professionnelle.
-    """
-
-    response = query_ollama(prompt)
-    return f"RECOMMANDATION D'IMAGERIE :\n\n{response}", False  # False = réponse complète
+    return f"RECOMMANDATION D'IMAGERIE :\n\n{recommendation}", False  # False = réponse complète
 
 def rag_query(user_input, collection):
     """Version simple pour compatibilité"""

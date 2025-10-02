@@ -1,7 +1,7 @@
 import chromadb
 import json
 
-# 
+# vectorisation du fichier guidelines
 def create_index(guidelines_file="guidelines.json", db_path="rag_db", collection_name="imagerie"):
     chroma_client = chromadb.PersistentClient(path=db_path)
     
