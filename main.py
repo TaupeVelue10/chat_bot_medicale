@@ -2,55 +2,57 @@ from indexage import create_index
 from ollama import get_collection, rag_query_interactive
 
 def chat_interactif(collection):
-    """Mode chat interactif avec le médecin - conversation continue"""
+    """Interface de chat interactive pour l'assistant médical"""
     print("Assistant médical d'imagerie")
     print("Tapez 'quit', 'exit' ou 'q' pour quitter\n")
     
-    # Contexte de conversation pour maintenir l'historique
-    conversation_history = []
+    conversation_context = ""
+    additional_info = []  # Liste pour accumuler toutes les informations complémentaires
     
     while True:
-        if not conversation_history:
-            question = input("Décrivez votre cas clinique : ")
-        else:
-            question = input("Complément d'information : ")
+        # Demander une entrée utilisateur
+        user_input = input("Décrivez votre cas clinique : ")
         
-        if question.lower() in ['quit', 'exit', 'q', 'quitter']:
+        # Vérifier si l'utilisateur veut quitter
+        if user_input.lower().strip() in ['quit', 'exit', 'q']:
             print("Au revoir.")
             break
-            
-        if question.strip():
-            # Ajouter la nouvelle information à l'historique
-            conversation_history.append(question)
-            
-            # Construire le contexte complet de manière structurée
-            if len(conversation_history) == 1:
-                current_input = conversation_history[0]
-            else:
-                current_input = f"Cas initial : {conversation_history[0]}\n"
-                current_input += "Informations complémentaires : " + " | ".join(conversation_history[1:])
-            
-            reponse, needs_more_info = rag_query_interactive(current_input, collection)
-            print(f"{reponse}\n")
-            
-            # Si une réponse complète a été donnée, réinitialiser pour un nouveau cas
-            if not needs_more_info:
-                print("Vous pouvez poser une nouvelle question.")
-                conversation_history = []
-            
-            print("-" * 40)
+        
+        # Construire le contexte de conversation
+        if conversation_context:
+            # Ajouter la nouvelle information à la liste
+            additional_info.append(user_input)
+            # Construire le contexte complet avec TOUTES les informations
+            all_additional = ", ".join(additional_info)
+            current_input = f"Cas initial : {conversation_context}\nInformations complémentaires : {all_additional}"
+        else:
+            current_input = user_input
+            conversation_context = user_input
+        
+        # Obtenir la réponse du système RAG
+        reponse, needs_more_info = rag_query_interactive(current_input, collection)
+        
+        print("----------------------------------------")
+        if needs_more_info:
+            print("Complément d'information :", reponse)
+            # Continuer la conversation sans réinitialiser le contexte
+        else:
+            print(reponse)
+            print("Vous pouvez poser une nouvelle question.")
+            # Réinitialiser le contexte pour une nouvelle consultation
+            conversation_context = ""
+            additional_info = []
+        print("----------------------------------------")
 
 def main():
-    """Fonction principale - évite les problèmes de cache et d'état"""
-    # Indexer guidelines 
+    # Étape 1 : Indexer guidelines si nécessaire (création ou mise à jour)
     create_index("guidelines.json")
     
-    # Charger la collection
+    # Étape 2 : Charger la collection
     collection = get_collection()
     
-    # Lancement du mode interactif
+    # Étape 3 : Démarrer le chat interactif
     chat_interactif(collection)
-
 
 if __name__ == "__main__":
     main()
