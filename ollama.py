@@ -93,15 +93,23 @@ def enhance_medical_query(user_input):
         
         # ABDOMEN
         'hématurie': ' sang urines lithiase calcul rénal néphrétique scanner',
-        'lombaire': ' dos rein néphrétique colique scanner abdomino-pelvien',
         'lombaire brutale': ' colique néphrétique calcul rénal scanner sans injection urgence',
         'douleur lombaire brutale': ' colique néphrétique lithiase calcul rénal scanner abdomino-pelvien',
+        'colique lombaire': ' colique néphrétique calcul rénal lithiase scanner abdomino-pelvien sans injection',
+        'colique typique': ' colique néphrétique calcul rénal lithiase hématurie scanner abdomino-pelvien',
+        'douleur irradiant': ' colique néphrétique calcul rénal scanner abdomino-pelvien sans injection',
+        'douleur irradiant aine': ' colique néphrétique calcul rénal lithiase scanner abdomino-pelvien',
         'sous-costale droite': ' biliaire vésicule cholécystite hépatique échographie',
         'fid': ' fosse iliaque droite appendicite échographie scanner',
         'douleur fid': ' appendicite échographie scanner abdomino-pelvien',
         'fièvre modérée': ' appendicite infection échographie',
         'diarrhée': ' gastro-entérite pas imagerie bon état général',
         'diffuses': ' gastro-entérite simple pas imagerie',
+        
+        # LOMBALGIE COMMUNE
+        'lombaire simple': ' lombalgie commune chronique pas imagerie 6 semaines',
+        'lombaire commune': ' lombalgie chronique pas imagerie avant 6 semaines',
+        'douleur lombaire simple': ' lombalgie commune pas imagerie avant 6 semaines',
         
         # MARCHE & NEUROLOGIE  
         'chutes': ' troubles marche pas imagerie examen clinique',
@@ -210,8 +218,8 @@ def calculate_contextual_score(user_input, guideline_text, metadata, vector_dist
         'hpn': ['hpn', 'hypertension intracranienne', 'troubles cognitifs progressifs', 'hydrocéphalie'],
         'sep': ['sclérose plaques', 'sep', 'paresthésies progressives', 'troubles marche paresthésies', 'remissions rechutes'],
         'colique': ['lombaire brutale', 'néphrétique', 'lithiase', 'calcul', 'brutale'],
-        'colique_nephretique': ['lombaire brutale', 'calcul', 'lithiase', 'hématurie', 'colique néphrétique', 'douleur irradiant aine'],
-        'lombalgie': ['chronique', '6 semaines', 'commune', 'radiculalgie'],
+        'colique_nephretique': ['lombaire brutale', 'calcul', 'lithiase', 'hématurie', 'colique néphrétique', 'douleur irradiant aine', 'colique lombaire', 'colique typique', 'rein', 'rénal'],
+        'lombalgie': ['chronique', '6 semaines', 'commune', 'radiculalgie', 'lombaire simple', 'lombaire commune', 'sans signe neurologique'],
         'biliaire': ['sous-costale droite', 'vésicule', 'cholécystite', 'voies biliaires', 'cholédoque'],
         'htic': ['vomissements', 'céphalées enfant', 'htic', 'pression'],
         'fievre_prolongee': ['fièvre prolongée', 'inexpliquée', 'persistante', 'chronique']  # Très spécifique
@@ -246,14 +254,19 @@ def calculate_contextual_score(user_input, guideline_text, metadata, vector_dist
     # 4. CORRESPONDANCE ANATOMIQUE STRICTE (critique pour éviter erreurs grossières)
     anatomical_regions = {
         'abdomen': {
-            'keywords': ['abdomen', 'abdominale', 'abdominales', 'ventre', 'fid', 'fosse iliaque', 'épigastre'],
-            'compatible': ['abdominal', 'digestif', 'échographie', 'scanner abdomino', 'appendicite', 'biliaire'],
-            'incompatible': ['cérébral', 'crâne', 'neurologique', 'irm cérébrale', 'ponction lombaire', 'hpn']
+            'keywords': ['abdomen', 'abdominale', 'abdominales', 'ventre', 'fid', 'fosse iliaque', 'épigastre', 'colique', 'néphrétique'],
+            'compatible': ['abdominal', 'digestif', 'échographie', 'scanner abdomino', 'appendicite', 'biliaire', 'néphrétique', 'calcul', 'lithiase'],
+            'incompatible': ['cérébral', 'crâne', 'irm cérébrale', 'ponction lombaire', 'hpn', 'troubles marche', 'paresthésies']
+        },
+        'lombalgie': {
+            'keywords': ['lombaire', 'lombaire simple', 'lombaire commune'],
+            'compatible': ['lombalgie', 'radiculalgie', 'irm lombaire', 'déficit neurologique'],
+            'incompatible': ['appendicite', 'scanner abdomino', 'échographie abdominale']
         },
         'neurologique': {
-            'keywords': ['céphalée', 'céphalées', 'mal de tête', 'neurologique', 'troubles cognitifs'],
-            'compatible': ['cérébral', 'crâne', 'irm cérébrale', 'neurologique', 'scanner cérébral'],
-            'incompatible': ['abdominal', 'digestif', 'échographie abdominale', 'scanner abdomino']
+            'keywords': ['céphalée', 'céphalées', 'mal de tête', 'neurologique', 'troubles cognitifs', 'déficit moteur'],
+            'compatible': ['cérébral', 'crâne', 'irm cérébrale', 'neurologique', 'scanner cérébral', 'troubles marche', 'paresthésies'],
+            'incompatible': ['abdominal', 'digestif', 'échographie abdominale', 'scanner abdomino', 'colique', 'néphrétique']
         }
     }
     
