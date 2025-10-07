@@ -3,7 +3,8 @@ from ollama import get_collection, rag_query_interactive
 
 def chat_interactif(collection):
     """Interface de chat interactive pour l'assistant médical"""
-    print("Assistant médical d'imagerie")
+    print("🏥 Assistant médical d'imagerie - Système RAG optimisé")
+    print("🚀 Mode : BlueBERT + scoring contextuel intelligent")
     print("Tapez 'quit', 'exit' ou 'q' pour quitter\n")
     
     conversation_context = ""

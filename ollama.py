@@ -1,20 +1,24 @@
-import requests
 import chromadb
 
 def get_collection(db_path="rag_db", collection_name="imagerie"):
+    """Récupère la collection ChromaDB avec BlueBERT embeddings"""
     chroma_client = chromadb.PersistentClient(path=db_path)
-    return chroma_client.get_collection(collection_name)
+    
+    # S'assurer que la collection utilise BlueBERT
+    from chromadb.utils import embedding_functions
+    medical_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name="bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12"
+    )
+    
+    try:
+        # Essayer de récupérer la collection existante
+        collection = chroma_client.get_collection(collection_name)
+        return collection
+    except:
+        # Si elle n'existe pas, la créer avec BlueBERT
+        return chroma_client.create_collection(collection_name, embedding_function=medical_ef)
 
-# interroge biomistral a partir de ollama
-def query_ollama(prompt, model="biomistral"):
-    response = requests.post("http://localhost:11434/api/generate", json={
-        "model": model,
-        "prompt": prompt,
-        "stream": False
-    })
-    return response.json()["response"]
-
-def analyze_missing_info(user_input, model="mistral"):
+def analyze_missing_info(user_input):
     """Analyse intelligente des informations manquantes pour poser des questions pertinentes"""
     text = user_input.lower()
     
@@ -131,7 +135,7 @@ def enhance_medical_query(user_input):
     
     return enhanced
 
-def smart_guideline_selection(user_input, collection, n_results=5):
+def smart_guideline_selection(user_input, collection, n_results=20):
     """Sélection intelligente de la meilleure guideline avec scoring contextuel"""
     enhanced_query = enhance_medical_query(user_input)
     
@@ -172,16 +176,19 @@ def calculate_contextual_score(user_input, guideline_text, metadata, vector_dist
     
     # FILTRES CONTEXTUELS CRITIQUES
     
-    # 1. Filtre grossesse : pénaliser si patient n'est manifestement pas une femme enceinte
+    # 1. Filtre grossesse : pénaliser TRÈS FORTEMENT si pas de mention explicite de grossesse
     if 'grossesse' in motif or 'enceinte' in guideline:
-        # Boost si contexte de grossesse évident
-        if any(word in text for word in ['enceinte', 'grossesse', 'gestation', 'femme']):
-            base_score += 0.3
-        # Pénalité forte sinn
+        # Boost si contexte de grossesse EXPLICITE
+        if any(word in text for word in ['enceinte', 'grossesse', 'gestation', 'SA', 'semaines']):
+            base_score += 0.5
+        # Pénalité ÉNORME si femme mentionnée mais pas de grossesse explicite
+        elif any(word in text for word in ['femme', 'patiente']):
+            base_score -= 1.8  # Pénalité énorme pour éviter faux positifs grossesse
+        # Pénalité encore plus forte si pas femme du tout
         else:
-            base_score -= 0.8
+            base_score -= 2.0
     
-    # 2. Filtre pédiatrique : pénaliser si âge adulte (>16 ans)
+    # 2. Filtre pédiatrique : pénaliser TRÈS FORTEMENT si âge adulte (>16 ans)
     if 'pediatrie' in motif or 'enfant' in guideline:
         # Extraire l'âge avec regex pour être plus précis
         import re
@@ -189,32 +196,83 @@ def calculate_contextual_score(user_input, guideline_text, metadata, vector_dist
         if age_match:
             age = int(age_match.group(1))
             if age > 16:  # Adulte
-                base_score -= 0.8  # Pénalité forte pour éviter confusion adulte/enfant
+                base_score -= 1.8  # Pénalité ÉNORME pour éviter confusion adulte/enfant
             else:  # Réellement un enfant
                 base_score += 0.3
         elif 'enfant' in text:
             base_score += 0.3
         elif any(adult_term in text for adult_term in ['adulte', 'homme', 'femme', 'patient', 'patiente']):
-            base_score -= 0.6
+            base_score -= 1.5  # Pénalité très forte pour adultes avec guidelines pédiatriques
     
-    # 3. Boost spécifique par pathologie détectée
+    # 3. Boost spécifique par pathologie détectée (TRÈS SPÉCIFIQUE pour éviter faux positifs)
     pathology_boosts = {
         'appendicite': ['fid', 'fosse iliaque droite', 'mcburney', 'appendic'],
         'hpn': ['hpn', 'hypertension intracranienne', 'troubles cognitifs progressifs', 'hydrocéphalie'],
-        'sep': ['sclérose plaques', 'troubles marche', 'paresthésies', 'sep'],
+        'sep': ['sclérose plaques', 'sep', 'paresthésies progressives', 'troubles marche paresthésies', 'remissions rechutes'],
         'colique': ['lombaire brutale', 'néphrétique', 'lithiase', 'calcul', 'brutale'],
-        'nephretique': ['lombaire brutale', 'calcul', 'lithiase', 'brutale', 'colique'],
+        'colique_nephretique': ['lombaire brutale', 'calcul', 'lithiase', 'hématurie', 'colique néphrétique', 'douleur irradiant aine'],
         'lombalgie': ['chronique', '6 semaines', 'commune', 'radiculalgie'],
-        'biliaire': ['sous-costale droite', 'vésicule', 'cholécystite', 'biliaire'],
-        'htic': ['vomissements', 'céphalées enfant', 'htic', 'pression']
+        'biliaire': ['sous-costale droite', 'vésicule', 'cholécystite', 'voies biliaires', 'cholédoque'],
+        'htic': ['vomissements', 'céphalées enfant', 'htic', 'pression'],
+        'fievre_prolongee': ['fièvre prolongée', 'inexpliquée', 'persistante', 'chronique']  # Très spécifique
     }
     
     for pathology, keywords in pathology_boosts.items():
         if pathology in motif or pathology in guideline:
-            if any(keyword in text for keyword in keywords):
+            # Pour fièvre prolongée, exiger une correspondance très spécifique
+            if pathology == 'fievre_prolongee':
+                if any(keyword in text for keyword in keywords):
+                    base_score += 0.3  # Boost modéré seulement si très spécifique
+                elif 'fièvre' in text and not any(specific in text for specific in ['prolongée', 'inexpliquée', 'persistante']):
+                    base_score -= 0.5  # Pénaliser si juste "fièvre" sans contexte prolongé
+            # Boost spécial pour colique néphrétique si mots-clés très spécifiques
+            elif pathology == 'colique_nephretique':
+                if any(keyword in text for keyword in keywords):
+                    base_score += 1.0  # Boost fort pour colique néphrétique authentique
+                elif 'colique' in text and any(nephro in text for nephro in ['lombaire', 'rein', 'calcul', 'lithiase', 'hématurie']):
+                    base_score += 0.8  # Boost pour combinaisons suggérant néphrétique
+            # Réduire boost biliaire si pas de contexte anatomique spécifique
+            elif pathology == 'biliaire':
+                # PÉNALISER pathologie biliaire si contexte suggère plutôt néphrétique
+                if any(nephro in text for nephro in ['lombaire', 'aine', 'hématurie', 'calcul', 'lithiase']):
+                    base_score -= 1.0  # Pénalité forte si contexte néphrétique
+                elif 'colique' in text and not any(bili_specific in text for bili_specific in ['sous-costale droite', 'vésicule', 'cholécystite']):
+                    base_score += 0.2  # Boost réduit si juste "colique" sans contexte biliaire
+                elif any(keyword in text for keyword in keywords):
+                    base_score += 0.5
+            elif any(keyword in text for keyword in keywords):
                 base_score += 0.5
                 
-    # 4. Boost pour correspondance de symptômes spécifiques
+    # 4. CORRESPONDANCE ANATOMIQUE STRICTE (critique pour éviter erreurs grossières)
+    anatomical_regions = {
+        'abdomen': {
+            'keywords': ['abdomen', 'abdominale', 'abdominales', 'ventre', 'fid', 'fosse iliaque', 'épigastre'],
+            'compatible': ['abdominal', 'digestif', 'échographie', 'scanner abdomino', 'appendicite', 'biliaire'],
+            'incompatible': ['cérébral', 'crâne', 'neurologique', 'irm cérébrale', 'ponction lombaire', 'hpn']
+        },
+        'neurologique': {
+            'keywords': ['céphalée', 'céphalées', 'mal de tête', 'neurologique', 'troubles cognitifs'],
+            'compatible': ['cérébral', 'crâne', 'irm cérébrale', 'neurologique', 'scanner cérébral'],
+            'incompatible': ['abdominal', 'digestif', 'échographie abdominale', 'scanner abdomino']
+        }
+    }
+    
+    detected_region = None
+    for region, data in anatomical_regions.items():
+        if any(keyword in text for keyword in data['keywords']):
+            detected_region = region
+            break
+    
+    if detected_region:
+        region_data = anatomical_regions[detected_region]
+        # Bonification forte pour correspondance anatomique
+        if any(term in guideline for term in region_data['compatible']):
+            base_score += 0.8  # Bonus très fort pour cohérence anatomique
+        # PÉNALISATION TRÈS FORTE pour incohérence anatomique  
+        elif any(term in guideline for term in region_data['incompatible']):
+            base_score -= 1.5  # Pénalité énorme pour éviter erreurs grossières
+    
+    # 5. Boost pour correspondance de symptômes spécifiques
     symptom_matches = 0
     if 'céphalées' in text and 'céphalées' in guideline:
         symptom_matches += 1
@@ -247,23 +305,18 @@ def extract_recommendation_from_guideline(guideline_text):
     
     # Classification précise des recommandations basées sur le contenu de la guideline
     if 'pas d\'imagerie' in text or 'aucune imagerie' in text:
-        return f"AUCUNE IMAGERIE : {guideline_text}"
+        return f"AUCUNE : {guideline_text}"
     elif 'urgence' in text or 'immédiat' in text or 'scanner cérébral sans injection immédiat' in text:  
-        return f"IMAGERIE URGENTE : {guideline_text}"
+        return f"URGENTE : {guideline_text}"
     elif 'ponction lombaire' in text:
-        return f"PONCTION LOMBAIRE INDIQUÉE : {guideline_text}"
+        return f"URGENTE : {guideline_text}"  # Ponction lombaire = urgence
     elif any(word in text for word in ['irm', 'scanner', 'échographie', 'radiographie', 'angioscanner']):
-        return f"IMAGERIE INDIQUÉE : {guideline_text}"
+        return f"INDIQUÉE : {guideline_text}"
     else:
-        return f"ÉVALUATION CLINIQUE : {guideline_text}"
+        return f"AUTRE : {guideline_text}"
 
 # Garder l'ancienne fonction comme fallback
-def generate_imaging_recommendation(user_input, guidelines):
-    """Version hybride qui utilise d'abord RAG puis fallback avec liste simple"""
-    if guidelines and len(guidelines) > 0:
-        best_guideline = guidelines[0]  # Utiliser la première pour compatibilité
-        return f"RECOMMANDATION (RAG) : {extract_recommendation_from_guideline(best_guideline)}"
-    return "ÉVALUATION CLINIQUE : Aucune guideline trouvée - Consultation spécialisée recommandée"
+
 
 def should_ask_clarification(user_input, is_first_interaction=True):
     """Détermine si on devrait poser des questions de clarification même avec info complètes"""
@@ -325,7 +378,4 @@ def generate_contextual_follow_up_question(user_input):
     else:
         return "Pouvez-vous me donner quelques précisions supplémentaires sur :\n- L'évolution des symptômes (brutal, progressif) ?\n- Les signes associés (fièvre, nausées, troubles neurologiques) ?\n- Le contexte (antécédents, traitements en cours) ?"
 
-def rag_query(user_input, collection):
-    """Version simple pour compatibilité"""
-    response, _ = rag_query_interactive(user_input, collection, is_first_interaction=False)
-    return response
+

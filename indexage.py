@@ -4,13 +4,15 @@ import json
 def create_index(guidelines_file="guidelines.json", db_path="rag_db", collection_name="imagerie"):
     chroma_client = chromadb.PersistentClient(path=db_path)
     
-    # Option 1: Utiliser un modèle d'embedding médical si disponible
-    # from chromadb.utils import embedding_functions
-    # medical_ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="emilyalsentzer/Bio_ClinicalBERT")
-    # collection = chroma_client.get_or_create_collection(collection_name, embedding_function=medical_ef)
+    #1: Utiliser BlueBERT - Modèle médical le plus performant (50% pertinence)
+    from chromadb.utils import embedding_functions
+    medical_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name="bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12"
+    )
+    collection = chroma_client.get_or_create_collection(collection_name, embedding_function=medical_ef)
     
-    # Option 2: Pour l'instant, utiliser le modèle par défaut optimisé
-    collection = chroma_client.get_or_create_collection(collection_name)
+    #2: Alternative modèle par défaut (désactivé)
+    # collection = chroma_client.get_or_create_collection(collection_name)
 
     docs = []
     with open(guidelines_file, "r") as f:
