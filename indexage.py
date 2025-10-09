@@ -33,7 +33,7 @@ def create_index(guidelines_file="guidelines.json", db_path="rag_db", collection
         metadatas=[{"motif": d["motif"], "source": d["source"]} for d in docs]
     )
 
-    print(f"✅ Indexation terminée ({len(docs)} documents).")
+    print(f" Indexation terminée ({len(docs)} documents).")
     return collection
 
 if __name__ == "__main__":
