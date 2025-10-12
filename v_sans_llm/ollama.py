@@ -5,7 +5,6 @@ Système d'aide à la décision pour l'imagerie médicale
 """
 
 import chromadb
-from sentence_transformers import SentenceTransformer
 import json
 
 # Variables globales
@@ -15,13 +14,26 @@ CHROMA_PATH = "rag_db"
 def get_collection():
     """Récupération de la collection ChromaDB"""
     client = chromadb.PersistentClient(path=CHROMA_PATH)
-    model = SentenceTransformer(MODEL_NAME)
-    collection = client.get_collection(
-        name="imagerie",
-        embedding_function=chromadb.utils.embedding_functions.SentenceTransformerEmbeddingFunction(
+    # Try to create a SentenceTransformer-based embedding function. If unavailable,
+    # fall back to returning a collection without an embedding function so the
+    # rest of the code can run (searches and scoring based on stored documents may
+    # be limited without embeddings).
+    try:
+        from chromadb.utils import embedding_functions
+        embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name=MODEL_NAME
         )
-    )
+        collection = client.get_collection(name="imagerie", embedding_function=embedding_fn)
+    except Exception as e:
+        print("[WARN] sentence_transformers not available or embedding init failed in get_collection:", e)
+        print("[WARN] Returning collection without embedding function. To enable embeddings, run: pip install sentence_transformers")
+        # If collection exists with a saved embedding config that can't be built,
+        # try to delete & recreate it without embedding to allow usage.
+        try:
+            client.delete_collection("imagerie")
+        except Exception:
+            pass
+        collection = client.get_or_create_collection("imagerie")
     return collection
 
 # ========================================
@@ -77,7 +89,6 @@ class InformationAnalyzer:
         if any(word in text for word in ['céphalée', 'mal de tête']):
             if not any(word in text for word in ['brutal', 'progressif', 'pulsatile', 'tension', 'vomissement', 'fièvre', 'coup de tonnerre']):
                 return "cephalees"
-        
         # Douleurs abdominales sans localisation
         if any(word in text for word in ['abdominale', 'ventre', 'douleur']):
             if not any(word in text for word in ['fid', 'fosse iliaque', 'épigastre', 'hypochondre', 'lombaire', 'sous-costale']):
