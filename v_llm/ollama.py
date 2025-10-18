@@ -111,14 +111,26 @@ RÉPONDS maintenant en FRANÇAIS.
     # key clinical tokens, force clarifying questions without calling the model.
     def _needs_clarification(case_text: str) -> bool:
         ct = case_text.lower()
-        # very short descriptions or only keywords
-        if len(ct) < 40:
+        # very short descriptions (less than 30 chars) or only "patient X ans, céphalées"
+        if len(ct) < 30:
             return True
-        # missing any important clinical features
-        tokens = ['depuis', 'brutal', 'brutale', 'intense', 'progress', 'fièvre', 'fievre', 'vomit', 'convuls', 'déficit', 'deficit', 'enceinte', 'grossesse', 'cancer', 'traumatisme']
-        if not any(t in ct for t in tokens):
+        # check if it's a minimal case with no detail beyond age+symptom
+        # minimal pattern: contains "patient" or age, and main symptom, but nothing else
+        has_basic = ('patient' in ct or 'patiente' in ct) and ('céphalée' in ct or 'cephalee' in ct)
+        if has_basic and len(ct) < 50:
+            # very likely just "patient X ans, céphalées" → needs clarification
             return True
-        return False
+        
+        # If it contains multiple key clinical tokens (onset, character, red flags, pregnancy status),
+        # then it's well-documented and doesn't need pre-clarification.
+        tokens = ['depuis', 'brutal', 'brutale', 'intense', 'progress', 'fièvre', 'fievre', 'vomit', 'convuls', 'déficit', 'deficit', 'enceinte', 'grossesse', 'cancer', 'traumatisme', 'pas de', 'non']
+        token_count = sum(1 for t in tokens if t in ct)
+        if token_count >= 3:
+            # has at least 3 clinical tokens → well-documented, let the model decide
+            return False
+        
+        # Default: if too few tokens, request clarification
+        return token_count < 2
 
     if _needs_clarification(question):
         return ("Pour préciser: Depuis quand et quel caractère ont les céphalées (brutale / intense / progressive) ? | "
@@ -134,21 +146,21 @@ RÉPONDS maintenant en FRANÇAIS.
         # Ollama's Python API supports a temperature param for many ops; we attempt to include it.
         try:
             if hasattr(ollama, 'generate'):
-                return ollama.generate(model='biomistral:latest', prompt=p, temperature=temp)
+                return ollama.generate(model='biomistral-clinical:latest', prompt=p, temperature=temp)
             if hasattr(ollama, 'chat'):
-                return ollama.chat(model='biomistral:latest', messages=[{'role': 'user', 'content': p}], temperature=temp)
+                return ollama.chat(model='biomistral-clinical:latest', messages=[{'role': 'user', 'content': p}], temperature=temp)
             if hasattr(ollama, 'create'):
-                return ollama.create(model='biomistral:latest', prompt=p, temperature=temp)
+                return ollama.create(model='biomistral-clinical:latest', prompt=p, temperature=temp)
         except TypeError:
             # some SDK versions may not accept temperature; retry without it
             pass
         # retry without temperature
         if hasattr(ollama, 'generate'):
-            return ollama.generate(model='biomistral:latest', prompt=p)
+            return ollama.generate(model='biomistral-clinical:latest', prompt=p)
         if hasattr(ollama, 'chat'):
-            return ollama.chat(model='biomistral:latest', messages=[{'role': 'user', 'content': p}])
+            return ollama.chat(model='biomistral-clinical:latest', messages=[{'role': 'user', 'content': p}])
         if hasattr(ollama, 'create'):
-            return ollama.create(model='biomistral:latest', prompt=p)
+            return ollama.create(model='biomistral-clinical:latest', prompt=p)
         raise RuntimeError('Installed ollama package does not expose generate/chat/create API')
 
     # First attempt
@@ -190,7 +202,11 @@ RÉPONDS maintenant en FRANÇAIS.
                         qs = parsed['questions']
                         return 'Pour préciser: ' + ' | '.join(qs)
                     if parsed.get('type') == 'recommendation' and isinstance(parsed.get('text'), str):
-                        return 'Recommandation: ' + parsed['text']
+                        rec_text = parsed['text']
+                        # Éviter la duplication si le texte commence déjà par "Recommandation:"
+                        if rec_text.strip().startswith('Recommandation:'):
+                            return rec_text.strip()
+                        return 'Recommandation: ' + rec_text
             except Exception:
                 pass
 
@@ -215,23 +231,62 @@ RÉPONDS maintenant en FRANÇAIS.
                     if low and not has_imaging:
                         return ("Recommandation: IRM cérébrale en urgence si signes d'alerte (déficit neurologique, céphalée "
                                 "d'apparition brutale, convulsions, fièvre ou traumatisme) — justifie par suspicion de lésion structurelle.")
+            
+            # Additional check: if the model returns "Pour préciser:" but with more than 5 questions
+            # or non-standard short tokens (indicates confusion), override with a deterministic recommendation.
+            if first_line.startswith('Pour préciser:'):
+                qs_part = first_line[len('Pour préciser:'):].strip()
+                import re
+                qs_candidates = [q.strip() for q in re.split(r'[\?;\|]', qs_part) if q.strip()]
+                if len(qs_candidates) > 5:
+                    # too many questions; model is confused — force a recommendation based on red flags
+                    lcq = question.lower()
+                    red_flags = [
+                        'brutal', 'brutale', 'soudain', 'déficit', 'deficit', 'déficit neurologique', 'deficit neurologique',
+                        'convuls', 'perte de connaissance', 'vomit', 'vomissements', 'fièvre', 'fievre', 'traumatisme', 'trauma',
+                    ]
+                    if any(rf in lcq for rf in red_flags):
+                        return ("Recommandation: IRM cérébrale en urgence si signes d'alerte (déficit neurologique, céphalée "
+                                "d'apparition brutale, convulsions, fièvre ou traumatisme) — justifie par suspicion de lésion structurelle.")
+                    else:
+                        return ("Recommandation: Pas d'imagerie en première intention si absence de signes d'alerte; "
+                                "traitement symptomatique et suivi ambulatoire. Refaire une évaluation si persistance/majoration.")
+            
             return first_line
 
     # Heuristic deterministic fallback: inspect the clinical text for red flags and return
     # a safe recommendation in French rather than forcing the user to relaunch.
     def _heuristic_recommendation(case_text: str) -> str:
         lc = case_text.lower()
-        red_flags = [
+        # Check for negations before checking red flags
+        import re
+        
+        # Red flag keywords
+        red_flag_keywords = [
             'brutal', 'brutale', 'soudain', 'déficit', 'deficit', 'déficit neurologique', 'deficit neurologique',
             'convuls', 'perte de connaissance', 'vomit', 'vomissements', 'fièvre', 'fievre', 'traumatisme', 'trauma',
         ]
-        if any(rf in lc for rf in red_flags):
+        
+        # Count how many red flags are present AND not negated
+        positive_red_flags = 0
+        for rf in red_flag_keywords:
+            if rf in lc:
+                # check if it's preceded by negation within a short window
+                idx = lc.find(rf)
+                # look back up to 15 chars for negation words
+                preceding = lc[max(0, idx-15):idx]
+                negation_words = ['pas de', 'pas d', 'sans', 'aucun', 'aucune', 'non']
+                if any(neg in preceding for neg in negation_words):
+                    continue  # negated → skip
+                positive_red_flags += 1
+        
+        if positive_red_flags > 0:
             return ("Recommandation: IRM cérébrale en urgence si signes d'alerte présents (déficit neurologique, céphalée "
                     "d'apparition brutale, convulsions, fièvre ou traumatisme) — justifie par suspicion de lésion "
                     "structurelle. Source: directives locales / RAG.")
 
         # Age-based or duration-based considerations (simple heuristics):
-        if re.search(r"\b(\d{1,2})\s*(jours|j|jr|semaines|mois)\b", case_text.lower()):
+        if re.search(r"\b(\d{1,2})\s*(jours|j|jr|semaines|mois)\b", lc):
             # subacute, no red flags
             return ("Recommandation: Pas d'imagerie en première intention si absence de signes d'alerte; "
                     "traitement symptomatique et suivi ambulatoire. Refaire une évaluation si persistance/majoration.")

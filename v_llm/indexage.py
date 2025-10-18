@@ -9,6 +9,10 @@ def create_index(guidelines_file="guidelines.json", collection_name="guidelines_
         embedding_function=embedding_functions.DefaultEmbeddingFunction()
     )
 
+    existing = collection.get()
+    if existing["ids"]:
+        collection.delete(ids=existing["ids"])
+
     with open(guidelines_file, "r", encoding="utf-8") as f:
         data = json.load(f)["guidelines"]
 
