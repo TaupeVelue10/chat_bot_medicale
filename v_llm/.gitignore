@@ -1,4 +1,40 @@
+# Fichiers temporaires Python
 __pycache__/
-.DS_Store
 *.pyc
 *.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Base de données RAG locale (reconstruite automatiquement)
+rag_db/
+
+# Environnements virtuels
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Modèles temporaires
+*.gguf.tmp
+*.safetensors.tmp

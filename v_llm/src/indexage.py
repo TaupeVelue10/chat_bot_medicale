@@ -2,7 +2,7 @@ import chromadb
 import json
 from chromadb.utils import embedding_functions
 
-def create_index(guidelines_file="guidelines.json", collection_name="guidelines_collection"):
+def create_index(guidelines_file="data/guidelines.json", collection_name="guidelines_collection"):
     client = chromadb.Client()
     collection = client.get_or_create_collection(
         name=collection_name,

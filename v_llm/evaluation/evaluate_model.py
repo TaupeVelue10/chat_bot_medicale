@@ -19,17 +19,20 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-import importlib.util
+# Add src directory to path to import indexage
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from indexage import create_index
 
+import importlib.util
 
 # Load the local ollama helper without shadowing the installed package
-_ollama_path = Path(__file__).parent / "ollama.py"
+_ollama_path = Path(__file__).parent.parent / "src" / "ollama.py"
 spec = importlib.util.spec_from_file_location("local_ollama", str(_ollama_path))
 local_ollama = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(local_ollama)  # type: ignore[attr-defined]
@@ -165,10 +168,10 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="Nombre de cas à évaluer (par défaut: dataset complet)")
     args = parser.parse_args()
 
-    dataset_path = Path(__file__).parent / "clinical_cases_val.jsonl"
+    dataset_path = Path(__file__).parent.parent / "data" / "clinical_cases_val.jsonl"
     cases = load_cases(dataset_path)
 
-    guidelines_path = Path(__file__).parent / "guidelines.json"
+    guidelines_path = Path(__file__).parent.parent / "data" / "guidelines.json"
     collection = create_index(str(guidelines_path))
 
     results = evaluate(cases, collection, limit=args.limit)

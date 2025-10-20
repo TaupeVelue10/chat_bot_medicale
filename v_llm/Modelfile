@@ -1,4 +1,4 @@
-FROM ./biomistral_clinical_lora_v2_merged-q8_0.gguf
+FROM ./models/biomistral_clinical_lora_v2_merged-q8_0.gguf
 
 PARAMETER temperature 0.0
 PARAMETER top_p 0.9

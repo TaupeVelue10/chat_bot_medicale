@@ -16,7 +16,7 @@ def main():
     print("-------------------------------------------------------------\n")
 
     # Chargement du RAG
-    guidelines_path = Path(__file__).parent / "guidelines.json"
+    guidelines_path = Path(__file__).parent.parent / "data" / "guidelines.json"
     collection = create_index(str(guidelines_path))
 
     print("Décrivez le cas clinique du patient (ou tapez 'quit' pour quitter)\n")
