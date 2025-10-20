@@ -2,14 +2,14 @@
 
 Assistant médical basé sur BioMistral-7B fine-tuné pour l'aide à la prescription d'imagerie cérébrale selon les guidelines HAS/SFETD 2017.
 
-## 🎯 Fonctionnalités
+##  Fonctionnalités
 
 - **RAG (Retrieval-Augmented Generation)** : Interroge une base de directives médicales
 - **Format structuré** : Sorties `Pour préciser:` ou `Recommandation:`
 - **Fine-tuning spécialisé** : 200 cas cliniques (céphalées, red flags, grossesse, traumatisme)
 - **Modèle quantifié Q8_0** : Balance qualité/performance pour déploiement Ollama
 
-## 📁 Structure du projet
+##  Structure du projet
 
 ```
 v_llm/
@@ -45,12 +45,12 @@ v_llm/
 │
 ├── Modelfile              # Configuration Ollama
 ├── requirements.txt       # Dépendances Python
-├── run_cli.sh            # 🚀 Lancer l'interface CLI
-├── run_evaluation.sh     # 📊 Lancer l'évaluation
+├── run_cli.sh            #  Lancer l'interface CLI
+├── run_evaluation.sh     #  Lancer l'évaluation
 └── .gitignore
 ```
 
-## 🚀 Démarrage rapide
+##  Démarrage rapide
 
 ### 1. Installation
 
@@ -105,7 +105,7 @@ une évaluation si persistance/majoration.
 ollama run biomistral-clinical "Patient 55 ans, céphalées brutales depuis 2h"
 ```
 
-## 🔬 Workflow d'entraînement
+##  Workflow d'entraînement
 
 ### 1. Génération du dataset
 ```bash
@@ -147,7 +147,7 @@ cd ..
 ollama create biomistral-clinical -f Modelfile
 ```
 
-## 📊 Métriques d'évaluation
+##  Métriques d'évaluation
 
 Le script `evaluate_model.py` calcule :
 - **Format compliance** : % de sorties respectant le format attendu
@@ -163,7 +163,7 @@ Urgence – précision : 85.7% (TP=6, prédits=7)
 Urgence – rappel : 75.0% (positifs réels=8)
 ```
 
-## 🔧 Configuration
+##  Configuration
 
 ### Modelfile (Ollama)
 ```
@@ -183,7 +183,7 @@ Le prompt dans `src/ollama.py` force :
 3. Format strict `Pour préciser:` / `Recommandation:`
 4. Justification basée sur les guidelines RAG
 
-## 📚 Guidelines médicales
+##  Guidelines médicales
 
 Le fichier `data/guidelines.json` contient :
 - Critères d'imagerie urgente (HAS/SFETD 2017)
@@ -221,14 +221,14 @@ ollama
 gguf-py (local)
 ```
 
-## ⚠️ Notes importantes
+##  Notes importantes
 
 1. **Modèle de base** : BioMistral-7B doit être téléchargé séparément (~14 GB)
 2. **Fine-tuning** : Nécessite GPU (Colab recommandé, T4 minimum)
 3. **Ollama** : Le modèle `biomistral-clinical:latest` doit être créé localement
 4. **ChromaDB** : Base RAG reconstruite à chaque lancement (pas de persistance)
 
-## 🔍 Debugging
+##  Debugging
 
 ### Le modèle ne respecte pas le format
 - Vérifier la température (doit être 0.0 pour déterminisme)
@@ -245,7 +245,7 @@ ollama create biomistral-clinical -f Modelfile
 Tous les scripts utilisent des chemins relatifs depuis leur position.  
 Toujours lancer depuis la racine du projet ou utiliser les wrappers `run_*.sh`.
 
-## 📈 Performance
+##  Performance
 
 | Métrique | Valeur |
 |----------|--------|
@@ -254,19 +254,19 @@ Toujours lancer depuis la racine du projet ou utiliser les wrappers `run_*.sh`.
 | Format compliance | >95% |
 | Précision clinique | ~70-75% |
 
-## 📝 TODO
+##  TODO
 
 - [ ] Améliorer la détection des négations ("sans fièvre" mal interprété)
 - [ ] Enrichir les guidelines avec plus de cas edge
 - [ ] Ajouter support multilingue (anglais médical)
 - [ ] Optimiser la logique de clarification dans `main.py`
 
-## 📄 Licence
+##  Licence
 
 Modèle de base : BioMistral-7B (Apache 2.0)  
 Code : À définir
 
-## 🤝 Contribution
+##  Contribution
 
 1. Ajouter des cas dans `training/generate_finetune_dataset.py`
 2. Fine-tuner avec le dataset étendu
