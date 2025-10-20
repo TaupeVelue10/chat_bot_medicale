@@ -209,7 +209,7 @@ Le fichier `data/guidelines.json` contient :
 ### Simplifier la logique CLI
 Si le modèle fine-tuné gère bien les clarifications, simplifier `src/main.py` lignes 40-100.
 
-## 📦 Dépendances principales
+##  Dépendances principales
 
 ```
 transformers>=4.57.0
