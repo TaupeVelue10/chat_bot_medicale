@@ -2,6 +2,8 @@ from pathlib import Path
 from indexage import create_index
 import importlib.util
 from pathlib import Path as _Path
+import argparse
+import sys
 
 # Load the local `ollama.py` module explicitly to avoid shadowing by the
 # installed `ollama` package in site-packages.
@@ -14,6 +16,13 @@ rag_biomistral_query = local_ollama.rag_biomistral_query
 def main():
     print("Assistant d'aide à la prescription d'imagerie")
     print("-------------------------------------------------------------\n")
+
+    # CLI args: by default we use the simple LLM+RAG flow. Pass --deterministic
+    # to enable the previous local decision-tree style interception.
+    parser = argparse.ArgumentParser(description='Assistant CLI')
+    parser.add_argument('--deterministic', action='store_true', help='Enable local deterministic pre-checks (decision tree)')
+    args, unknown = parser.parse_known_args()
+    deterministic_mode = args.deterministic
 
     # Chargement du RAG
     guidelines_path = Path(__file__).parent.parent / "data" / "guidelines.json"
@@ -35,29 +44,54 @@ def main():
         # treat the latest user_input as the answers (either single-line comma/| separated
         # or a single answer) and map them to the pending questions.
         if pending_questions:
-            # split answers
+            # split answers and attempt to recognize which fragment answers which question
             import re
-            answers = [a.strip() for a in re.split(r"\||,|;", user_input) if a.strip()]
-            # map answers to questions
+            fragments = [a.strip() for a in re.split(r"\||,|;", user_input) if a.strip()]
+
+            # Helpers to classify a fragment
+            def is_duration_or_character(s: str) -> bool:
+                s = s.lower()
+                return bool(re.search(r"depuis|\b\d+\s*(h|heures|jours|semaines|mois|ans)\b|brutal|brutale|intense|progress", s))
+
+            def is_redflag(s: str) -> bool:
+                s = s.lower()
+                return any(w in s for w in ['fièvre', 'fievre', 'vomit', 'vomissements', 'convuls', 'perte de connaissance', 'déficit', 'deficit', 'brutal', 'brutale'])
+
+            def is_preg_onco(s: str) -> bool:
+                s = s.lower()
+                return any(w in s for w in ['enceinte', 'grossesse', 'cancer', 'oncologique', 'immunod', 'antécédent'])
+
+            # mapping results
+            mapped = ["", "", ""]
+            # First assign by position when possible
+            for i in range(min(len(fragments), 3)):
+                mapped[i] = fragments[i]
+
+            # If any fragment seems misplaced, try to reassign based on content
+            for frag in fragments:
+                if is_duration_or_character(frag) and not is_redflag(frag) and not is_preg_onco(frag):
+                    mapped[0] = frag
+                elif is_redflag(frag):
+                    mapped[1] = frag
+                elif is_preg_onco(frag):
+                    mapped[2] = frag
+
+            # Ensure duration has explicit duration; if not, ask follow-up
+            lc0 = mapped[0].lower()
+            if mapped[0] and not re.search(r"depuis|\b\d+\s*(h|heures|jours|semaines|mois|ans)\b", lc0):
+                follow = input("Précisez la durée (ex: '2 jours', '1 semaine', '2 semaines', ou 'depuis 3 jours'): ")
+                if follow.lower() in ["quit", "exit", "q"]:
+                    print("Fin de session.")
+                    return
+                if follow.strip():
+                    if mapped[0]:
+                        mapped[0] = mapped[0] + ", depuis " + follow.strip()
+                    else:
+                        mapped[0] = "depuis " + follow.strip()
+
+            # Append mapped answers to case_history
             for i, q in enumerate(pending_questions):
-                ans = answers[i] if i < len(answers) else ''
-                # For the first question (onset + character), ensure duration is provided; if not, ask a short follow-up.
-                if i == 0:
-                    lcans = ans.lower()
-                    # look for duration keywords or patterns
-                    if not ("depuis" in lcans or re.search(r"\b(\d+\s*(h|heures|jours|jours|semaines|mois|ans))\b", lcans)):
-                        # ask user for duration
-                        follow = input("Précisez la durée (ex: '2 jours', '1 semaine', '2 semaines', ou 'depuis 3 jours'): ")
-                        if follow.lower() in ["quit", "exit", "q"]:
-                            print("Fin de session.")
-                            return
-                        if follow.strip():
-                            # combine character + duration if character exists
-                            if ans:
-                                ans = ans + ", depuis " + follow.strip()
-                            else:
-                                ans = "depuis " + follow.strip()
-                case_history = case_history.rstrip() + ", " + q.lstrip() + ": " + ans
+                case_history = case_history.rstrip() + ", " + q.lstrip() + ": " + (mapped[i] or '')
             pending_questions = None
         else:
             # Accumulate the clinical case: initial description followed by clarifications
@@ -67,7 +101,46 @@ def main():
                 # Append clarification to the case history
                 case_history = case_history.rstrip() + ", " + user_input.lstrip()
 
-        response = rag_biomistral_query(case_history, collection)
+        # By default use the simple RAG + LLM flow: the prompt instructs the
+        # model to ask clarifying questions when information is missing. If the
+        # user passed --deterministic we fall back to the local deterministic
+        # pre-checks implemented previously.
+        response = None
+        if deterministic_mode:
+            det = None
+            try:
+                # Load local guidelines_logic dynamically (avoid PYTHONPATH issues)
+                import importlib.util, pathlib
+                mod_path = pathlib.Path(__file__).parent / 'guidelines_logic.py'
+                spec = importlib.util.spec_from_file_location('local_guidelines_logic', str(mod_path))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                analyze_guidelines = getattr(mod, 'analyze_guidelines')
+                det = analyze_guidelines(case_history)
+            except Exception:
+                det = None
+
+            if isinstance(det, str) and det.startswith("Pour préciser:"):
+                import re
+                questions_text = det[len("Pour préciser:"):].strip()
+                candidates = [q.strip() for q in re.split(r"[\?;\n\|]", questions_text) if q.strip()]
+                if not candidates:
+                    candidates = [questions_text]
+                pending_questions = candidates
+                print("\nBioMistral : Pour préciser (répondez sur une seule ligne, séparées par '\|' ou des virgules) :")
+                print(" | ".join(pending_questions))
+                continue
+            elif isinstance(det, str) and det:
+                if det.startswith("URGENCE"):
+                    response = det
+                else:
+                    response = "Recommandation: " + det
+            else:
+                response = rag_biomistral_query(case_history, collection)
+        else:
+            # Simple flow: always call the RAG+LLM. The model is instructed to ask
+            # clarifying questions if data is missing.
+            response = rag_biomistral_query(case_history, collection)
 
         # If the model asks for clarifications, extract the questions and set them as pending.
         if isinstance(response, str) and response.startswith("Pour préciser:"):
