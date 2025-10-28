@@ -8,3 +8,6 @@ venv/
 # Fichiers Python inutiles
 __pycache__/
 *.pyc
+
+# Fichiers confidentiels
+.env
