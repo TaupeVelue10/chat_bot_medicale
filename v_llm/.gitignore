@@ -1,3 +1,30 @@
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+env/
+*.pyc
+
+# Virtual env
+/.venv/
+
+# Mac
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
+
+# Models and large artifacts
+models/
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+
+# Data
+data/
 # Fichiers temporaires Python
 __pycache__/
 *.pyc

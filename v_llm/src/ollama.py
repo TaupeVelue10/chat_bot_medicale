@@ -1,15 +1,3 @@
-
-"""
-ollama.py - RAG query helper for BioMistral via the installed Ollama SDK.
-
-This module imports the installed `ollama` package at runtime (removing the
-workspace folder from sys.path while importing) to avoid accidental shadowing
-by a local file named `ollama.py`.
-
-Function provided:
-- rag_biomistral_query(question: str, collection) -> str
-
-"""
 from pathlib import Path
 import importlib
 import sys
@@ -34,9 +22,8 @@ def _import_installed_ollama():
         if removed:
             sys.path.insert(0, project_dir)
 
-
+# return du texte normalisé
 def _normalize_response(resp: Any) -> str:
-    """Return a plain-text assistant response for several possible SDK shapes."""
     if resp is None:
         return ""
     if isinstance(resp, dict):
@@ -54,25 +41,17 @@ def _normalize_response(resp: Any) -> str:
         return str(getattr(resp, 'content'))
     return str(resp)
 
+# lance un rag query, récupère le contexte venant de chromaDB, construit un prompt et appelle Biomistral
+def rag_biomistral_query(question: str, collection) -> str:
 
-def rag_biomistral_query(question: str, collection, temperature: float = 0.0) -> str:
-    """Run a RAG query: pull context from ChromaDB, build a strict prompt and call BioMistral.
-
-    - If required decision criteria are missing in the case, the model MUST ask
-      clarifying questions (begin response with "Pour préciser:").
-    - If information is sufficient, the model MUST give a short recommendation
-      beginning with "Recommandation:" and a brief justification tied to the
-      supplied guidelines.
-    """
-
-    # Step 1: retrieve context from ChromaDB
+# 1 - récupére le contexte de ChromaDB
     results = collection.query(query_texts=[question], n_results=3)
     context = "\n".join(
         f"- {doc} (source: {meta.get('source')}, motif: {meta.get('motif')})"
         for doc, meta in zip(results['documents'][0], results['metadatas'][0])
     )
 
-    # Step 2: build a strict prompt that forces questions when info is missing
+    # 2 créer un prompt qui force a poser des questions si infos manquantes
     prompt = f"""GUIDELINES (source: local RAG):
 {context}
 
@@ -109,24 +88,11 @@ RÉPONDS maintenant en FRANÇAIS.
 
 
 
-    # Step 3: import installed ollama SDK and call the model
+    # 3 on import ollama et on apelle le modèle
     ollama = _import_installed_ollama()
 
-    # Prefer generate, fallback to chat/create
-    def _call_model(p: str, temp: float = 0.0):
-        # Try to pass the temperature when calling the SDK; fall back to calls without it if unsupported.
-        # Ollama's Python API supports a temperature param for many ops; we attempt to include it.
-        try:
-            if hasattr(ollama, 'generate'):
-                return ollama.generate(model='biomistral-clinical:latest', prompt=p, temperature=temp)
-            if hasattr(ollama, 'chat'):
-                return ollama.chat(model='biomistral-clinical:latest', messages=[{'role': 'user', 'content': p}], temperature=temp)
-            if hasattr(ollama, 'create'):
-                return ollama.create(model='biomistral-clinical:latest', prompt=p, temperature=temp)
-        except TypeError:
-            # some SDK versions may not accept temperature; retry without it
-            pass
-        # retry without temperature
+    #  appelle le modèle
+    def _call_model(p: str):
         if hasattr(ollama, 'generate'):
             return ollama.generate(model='biomistral-clinical:latest', prompt=p)
         if hasattr(ollama, 'chat'):
@@ -135,23 +101,23 @@ RÉPONDS maintenant en FRANÇAIS.
             return ollama.create(model='biomistral-clinical:latest', prompt=p)
         raise RuntimeError('Installed ollama package does not expose generate/chat/create API')
 
-    # Call the model and return its response
-    resp = _call_model(prompt, temp=temperature)
+    # appelle le modèle et on la passe dans la fonction normalize
+    resp = _call_model(prompt)
     text = _normalize_response(resp).strip()
 
-    # Check if output follows expected format
+    # vérifie si la réponse suis le bon format
     prefixes = ('Pour préciser:', 'Recommandation:')
     if any(text.startswith(p) for p in prefixes):
         return text
 
-    # Retry once with explicit reminder if format not respected
+    # si la réponse ne suis pas le bon format on réessaye avec un rappel
     reminder = prompt + "\n\nRAPPEL: Commence ta réponse PAR soit 'Pour préciser:' soit 'Recommandation:' et DONNE UNE SEULE LIGNE."
-    resp2 = _call_model(reminder, temp=temperature)
+    resp2 = _call_model(reminder)
     text2 = _normalize_response(resp2).strip()
     if any(text2.startswith(p) for p in prefixes):
         return text2
 
-    # Fallback: return safe clarification request
+    # Fallback hardcoder si jamais le modèle ne suis pas le format
     return ("Pour préciser: Depuis quand et quel caractère ont les céphalées (brutale / intense / progressive) ? | "
             "Y a‑t‑il fièvre, vomissements, perte de connaissance, convulsions ou déficit neurologique focal ? | "
             "La patiente est‑elle enceinte, a‑t‑elle des antécédents majeurs (cancer, immunodépression) ou un traumatisme crânien récent ?")
