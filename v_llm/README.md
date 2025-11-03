@@ -6,7 +6,28 @@ Projet: Minimal BioMistral RAG pipeline
 
 Ce dépôt contient une version minimale d'un pipeline RAG (retrieval-augmented generation) centré sur BioMistral.
 L'objectif est simple :
-- indexer / encoder l'input (placeholder BlueBERT),
+- indexer / encoder l'input,
+- récupérer des documents pertinents depuis un index RAG (objet `collection`),
+- construire un prompt en français et appeler le modèle BioMistral via le client `ollama` installé.
+
+Fichiers importants
+- `src/ollama.py` : fonction `rag_biomistral_query(question, collection)` — exécute la requête RAG et appelle BioMistral. Ce module n'utilise pas de paramètre de température.
+- `src/main.py` : petit runner/CLI (si présent) pour appeler la fonction depuis la ligne de commande.
+
+Prérequis
+- Python 3.10+ recommandé.
+- Client Ollama installé et modèle `biomistral-clinical:latest` disponible localement (ou via le client utilisé dans votre environnement).
+
+Installation (en local)
+README
+======
+
+Projet: Minimal BioMistral RAG pipeline
+-------------------------------------
+
+Ce dépôt contient une version minimale d'un pipeline RAG (retrieval-augmented generation) centré sur BioMistral.
+L'objectif est simple :
+- indexer / encoder l'input,
 - récupérer des documents pertinents depuis un index RAG (objet `collection`),
 - construire un prompt en français et appeler le modèle BioMistral via le client `ollama` installé.
 
