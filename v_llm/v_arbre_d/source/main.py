@@ -191,14 +191,269 @@ def get_contraindications_text(f):
     """Retourne le texte des remarques/contre-indications pour affichage et export."""
     lines = []
     lines.append("Remarques complémentaires :")
+    
+    # Remarques spécifiques à la grossesse
     if f["sexe"] == "f" and (not f["age"] or f["age"] < 50):
         if f.get("grossesse_sem") and f.get("grossesse_sem") < 4:
             lines.append("• Le scanner est strictement contre-indiqué pour une grossesse débutante (<4 semaines).")
+        elif f.get("grossesse"):
+            # Grossesse confirmée : pas besoin de test
+            lines.append(f"• Grossesse confirmée ({f.get('grossesse_sem', 'durée précisée')} SA) : précautions d'irradiation à respecter.")
         else:
+            # Pas de grossesse connue : recommander le test
             lines.append("• Chez les femmes de moins de 50 ans, un test de grossesse est recommandé avant tout examen radiologique.")
+    
     lines.append("• Chez les patients de plus de 60 ans ou ayant des antécédents rénaux, un dosage de la créatinine est nécessaire avant injection de produit de contraste.")
-    lines.append("• En cas d’allergie, signaler toute réaction préalable, mais les allergies aux crustacés ou à la Bétadine ne constituent pas une contre-indication au scanner iodé.")
+    lines.append("• En cas d'allergie, signaler toute réaction préalable, mais les allergies aux crustacés ou à la Bétadine ne constituent pas une contre-indication au scanner iodé.")
     return "\n".join(lines)
+
+
+def generer_ordonnance(f, texte_initial, decision, contraindications_text):
+    """Génère le contenu d'une ordonnance médicale au format français.
+    
+    Args:
+        f: dictionnaire des informations patient et cliniques
+        texte_initial: texte libre du médecin
+        decision: recommandation d'imagerie
+        contraindications_text: texte des contre-indications
+    
+    Returns:
+        str: contenu formaté de l'ordonnance
+    """
+    now = datetime.now()
+    
+    # En-tête de l'ordonnance
+    ordonnance = []
+    ordonnance.append("=" * 80)
+    ordonnance.append(" " * 28 + "ORDONNANCE MÉDICALE")
+    ordonnance.append("=" * 80)
+    ordonnance.append("")
+    
+    # Informations du praticien (à personnaliser selon les besoins)
+    ordonnance.append("Dr. [NOM DU MÉDECIN]")
+    ordonnance.append("[Spécialité]")
+    ordonnance.append("[Adresse du cabinet]")
+    ordonnance.append("[Code postal et ville]")
+    ordonnance.append("Tél : [Numéro de téléphone]")
+    ordonnance.append("N° RPPS : [Numéro RPPS]")
+    ordonnance.append("")
+    ordonnance.append(f"Date : {now.strftime('%d/%m/%Y')}")
+    ordonnance.append(f"Heure : {now.strftime('%H:%M')}")
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Informations patient
+    ordonnance.append("PATIENT(E) :")
+    ordonnance.append("")
+    ordonnance.append(f"Nom : [À COMPLÉTER]")
+    ordonnance.append(f"Prénom : [À COMPLÉTER]")
+    if f.get("age"):
+        ordonnance.append(f"Âge : {f['age']} ans")
+    else:
+        ordonnance.append(f"Âge : [À COMPLÉTER]")
+    
+    if f.get("sexe"):
+        sexe_txt = "Féminin" if f['sexe'] == 'f' else "Masculin"
+        ordonnance.append(f"Sexe : {sexe_txt}")
+    else:
+        ordonnance.append(f"Sexe : [À COMPLÉTER]")
+    
+    ordonnance.append(f"N° Sécurité Sociale : [À COMPLÉTER]")
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Motif de consultation
+    ordonnance.append("MOTIF DE CONSULTATION :")
+    ordonnance.append("")
+    ordonnance.append(f"{texte_initial}")
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Éléments cliniques recueillis
+    ordonnance.append("ÉLÉMENTS CLINIQUES RECUEILLIS :")
+    ordonnance.append("")
+    
+    # Grossesse si applicable
+    if f.get("grossesse") is True and f.get("sexe") == "f":
+        gs = f.get("grossesse_sem") or "durée non précisée"
+        if isinstance(gs, int):
+            ordonnance.append(f"• Grossesse en cours : {gs} semaines d'aménorrhée")
+        else:
+            ordonnance.append(f"• Grossesse en cours : {gs}")
+    
+    # Signes cliniques et antécédents
+    signes_cliniques = []
+    if f.get("fievre"):
+        signes_cliniques.append("Syndrome fébrile")
+    if f.get("brutale"):
+        signes_cliniques.append("Installation brutale (céphalée en coup de tonnerre)")
+    if f.get("deficit"):
+        signes_cliniques.append("Déficit moteur ou sensitif")
+    if f.get("vertige"):
+        signes_cliniques.append("Vertige")
+    if f.get("oncologique"):
+        signes_cliniques.append("Antécédent oncologique")
+    if f.get("chirurgie"):
+        signes_cliniques.append("Chirurgie récente (<6 semaines) avec matériel")
+    if f.get("pacemaker"):
+        signes_cliniques.append("Porteur de pacemaker")
+    if f.get("claustrophobie"):
+        signes_cliniques.append("Claustrophobie")
+    
+    if signes_cliniques:
+        for signe in signes_cliniques:
+            ordonnance.append(f"• {signe}")
+    else:
+        ordonnance.append("• Pas de signe de gravité identifié")
+    
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Raisonnement clinique / Arbre décisionnel
+    ordonnance.append("RAISONNEMENT CLINIQUE ET ARBRE DÉCISIONNEL :")
+    ordonnance.append("")
+    
+    # Analyse de la situation
+    ordonnance.append("Analyse de la situation :")
+    if f["fievre"] or f["brutale"] or f["deficit"] or f["vertige"]:
+        ordonnance.append("• Présence de critères d'urgence :")
+        if f["fievre"]:
+            ordonnance.append("  - Céphalée fébrile → risque de méningite ou d'infection du SNC")
+        if f["brutale"]:
+            ordonnance.append("  - Installation brutale → risque d'hémorragie méningée")
+        if f["deficit"]:
+            ordonnance.append("  - Déficit neurologique → risque d'AVC ou de lésion focale")
+        if f["vertige"]:
+            ordonnance.append("  - Vertige → exploration neurologique nécessaire")
+        ordonnance.append("  → Indication à une imagerie en urgence")
+    elif f["oncologique"]:
+        ordonnance.append("• Contexte oncologique → surveillance des métastases cérébrales")
+    elif f["grossesse"]:
+        if f.get("grossesse_sem"):
+            if f["grossesse_sem"] < 4:
+                ordonnance.append("• Grossesse < 4 semaines → contre-indication absolue au scanner")
+            elif f["grossesse_sem"] < 12:
+                ordonnance.append("• Grossesse < 12 semaines → scanner uniquement si urgence vitale")
+                ordonnance.append("• IRM contre-indiquée au 1er trimestre")
+            else:
+                ordonnance.append("• Grossesse > 12 semaines → imagerie possible avec précautions")
+    
+    ordonnance.append("")
+    ordonnance.append("Choix de l'examen d'imagerie :")
+    ordonnance.append(f"{decision}")
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Prescription
+    ordonnance.append("PRESCRIPTION :")
+    ordonnance.append("")
+    
+    # Déterminer le type d'examen prescrit en fonction des données structurées
+    # Vérifier d'abord les contre-indications absolues
+    if f.get("grossesse") and f.get("grossesse_sem"):
+        if f["grossesse_sem"] < 4:
+            # Grossesse < 4 semaines : contre-indication absolue au scanner, IRM aussi
+            ordonnance.append("⚠️  AUCUN EXAMEN D'IMAGERIE RECOMMANDÉ")
+            ordonnance.append("    Grossesse < 4 semaines : contre-indication au scanner")
+            ordonnance.append("    IRM contre-indiquée au 1er trimestre")
+            ordonnance.append("    → Surveillance clinique et différer l'imagerie si possible")
+        elif f["grossesse_sem"] < 12 and not (f["fievre"] or f["brutale"] or f["deficit"]):
+            # Grossesse < 12 semaines SANS urgence
+            ordonnance.append("⚠️  IMAGERIE DIFFÉRÉE RECOMMANDÉE")
+            ordonnance.append("    Grossesse < 12 semaines sans critère d'urgence vitale")
+            ordonnance.append("    Scanner uniquement si urgence vitale (non applicable ici)")
+            ordonnance.append("    IRM contre-indiquée au 1er trimestre")
+            ordonnance.append("    → Réévaluation après le 1er trimestre")
+        elif f["grossesse_sem"] < 12 and (f["fievre"] or f["brutale"] or f["deficit"]):
+            # Grossesse < 12 semaines AVEC urgence
+            ordonnance.append("☐ SCANNER CÉRÉBRAL SANS INJECTION")
+            ordonnance.append("    En URGENCE VITALE (après concertation)")
+            ordonnance.append("    Indication : Critères d'urgence avec grossesse < 12 semaines")
+            ordonnance.append("    ⚠️  Nécessite avis radiologique et accord de la patiente")
+        else:
+            # Grossesse >= 12 semaines
+            if f["fievre"] or f["brutale"] or f["deficit"]:
+                ordonnance.append("☐ SCANNER CÉRÉBRAL SANS INJECTION")
+                ordonnance.append("    En urgence")
+                ordonnance.append("    Indication : Céphalée aiguë avec critères de gravité")
+            else:
+                ordonnance.append("☐ IRM CÉRÉBRALE SANS INJECTION")
+                ordonnance.append("    Indication : Céphalée sans critère d'urgence (grossesse)")
+    elif f["fievre"] or f["brutale"] or f["deficit"] or f["vertige"]:
+        # Urgence sans grossesse
+        ordonnance.append("☐ SCANNER CÉRÉBRAL SANS INJECTION")
+        ordonnance.append("    En urgence")
+        ordonnance.append("    Indication : Céphalée aiguë avec critères de gravité")
+    elif f["oncologique"]:
+        ordonnance.append("☐ SCANNER CÉRÉBRAL AVEC INJECTION")
+        ordonnance.append("    Indication : Contexte oncologique, recherche de métastases")
+    elif "irm" in decision.lower() and "recommandée" in decision.lower():
+        ordonnance.append("☐ IRM CÉRÉBRALE SANS INJECTION")
+        ordonnance.append("    Indication : Céphalée sans critère d'urgence")
+    else:
+        ordonnance.append("☐ [EXAMEN D'IMAGERIE À PRÉCISER]")
+        ordonnance.append("    → Consultation médicale pour évaluation")
+    
+    ordonnance.append("")
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Contre-indications et précautions
+    ordonnance.append("CONTRE-INDICATIONS ET PRÉCAUTIONS :")
+    ordonnance.append("")
+    ordonnance.append(contraindications_text)
+    ordonnance.append("")
+    
+    # Examens complémentaires si nécessaire
+    examens_bio_ajoutes = False
+    
+    # Créatininémie si > 60 ans
+    if f.get("age") and f["age"] > 60:
+        ordonnance.append("")
+        ordonnance.append("EXAMENS BIOLOGIQUES À PRÉVOIR :")
+        ordonnance.append("")
+        ordonnance.append("☐ Créatininémie + calcul de la clairance (DFG)")
+        ordonnance.append("    (Avant injection de produit de contraste)")
+        examens_bio_ajoutes = True
+    
+    # β-hCG UNIQUEMENT si femme < 50 ans ET grossesse NON confirmée
+    if f.get("sexe") == "f" and (not f.get("age") or f["age"] < 50) and not f.get("grossesse"):
+        if not examens_bio_ajoutes:
+            ordonnance.append("")
+            ordonnance.append("EXAMENS BIOLOGIQUES À PRÉVOIR :")
+            ordonnance.append("")
+        ordonnance.append("☐ β-hCG plasmatique (test de grossesse)")
+        ordonnance.append("    (Avant tout examen irradiant)")
+        examens_bio_ajoutes = True
+    
+    if examens_bio_ajoutes:
+        ordonnance.append("")
+    
+    ordonnance.append("-" * 80)
+    ordonnance.append("")
+    
+    # Pied de page
+    ordonnance.append("Date et signature du praticien :")
+    ordonnance.append("")
+    ordonnance.append(f"Fait le {now.strftime('%d/%m/%Y')} à {now.strftime('%H:%M')}")
+    ordonnance.append("")
+    ordonnance.append("")
+    ordonnance.append("Signature et cachet :")
+    ordonnance.append("")
+    ordonnance.append("")
+    ordonnance.append("")
+    ordonnance.append("=" * 80)
+    ordonnance.append("")
+    ordonnance.append("Cette ordonnance a été générée avec l'assistance d'un système d'aide à la décision")
+    ordonnance.append("clinique. Elle doit être validée par le médecin prescripteur.")
+    ordonnance.append("")
+    
+    return "\n".join(ordonnance)
 
 
 def save_report(report_text, filename=None):
@@ -207,8 +462,10 @@ def save_report(report_text, filename=None):
     Retourne le chemin du fichier créé.
     """
     import os
-    # Créer le dossier reports si nécessaire
-    reports_dir = os.path.join(os.getcwd(), "reports")
+    # Obtenir le répertoire du script (source/) puis remonter au parent (v_arbre_d/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)  # v_arbre_d/
+    reports_dir = os.path.join(project_root, "reports")
     os.makedirs(reports_dir, exist_ok=True)
 
     if not filename:
@@ -221,6 +478,32 @@ def save_report(report_text, filename=None):
 
     with open(filename, "w", encoding="utf-8") as fh:
         fh.write(report_text)
+
+    return os.path.abspath(filename)
+
+
+def save_ordonnance(ordonnance_text, filename=None):
+    """Enregistre l'ordonnance dans un fichier .txt (UTF-8) dans le dossier ordonnances/.
+    Si `filename` est None ou vide, génère un nom basé sur la date/heure.
+    Retourne le chemin du fichier créé.
+    """
+    import os
+    # Obtenir le répertoire du script (source/) puis remonter au parent (v_arbre_d/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)  # v_arbre_d/
+    ordonnances_dir = os.path.join(project_root, "ordonnances")
+    os.makedirs(ordonnances_dir, exist_ok=True)
+
+    if not filename:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"ordonnance_{ts}.txt"
+
+    # Si l'utilisateur a fourni un nom simple, l'enregistrer dans ordonnances/
+    if not os.path.isabs(filename):
+        filename = os.path.join(ordonnances_dir, filename)
+
+    with open(filename, "w", encoding="utf-8") as fh:
+        fh.write(ordonnance_text)
 
     return os.path.abspath(filename)
 
@@ -266,6 +549,39 @@ def chatbot_cephalees():
     i = 0
     while i < len(questions):
         key, q = questions[i]
+        
+        # Cas spécial pour la grossesse : si détectée dans le texte mais sans durée précise
+        if key == "grossesse" and f[key] and f.get("grossesse_sem") is None:
+            # La grossesse a été détectée mais pas la durée, il faut la demander
+            print("\nDurée de la grossesse :")
+            raw = input("Nombre de semaines (laisser vide si inconnu) : ").strip()
+            if raw:
+                try:
+                    w = int(raw)
+                    if 0 <= w <= GROSSESSE_MAX_WEEKS:
+                        f["grossesse_sem"] = w
+                    else:
+                        print(f"Nombre de semaines hors plage (0-{GROSSESSE_MAX_WEEKS}), valeur ignorée.")
+                        f["grossesse_sem"] = None
+                except ValueError:
+                    # entrée non numérique -> retomber sur des catégories 
+                    if demander_oui_non("Moins de 4 semaines ?") == True:
+                        f["grossesse_sem"] = GROSSESSE_EXAMPLE_LT4
+                    elif demander_oui_non("Entre 4 et 12 semaines ?") == True:
+                        f["grossesse_sem"] = GROSSESSE_EXAMPLE_4_12
+                    else:
+                        f["grossesse_sem"] = GROSSESSE_EXAMPLE_GT12
+            else:
+                # utilisateur n'a pas fourni de nombre -> proposer des choix rapides
+                if demander_oui_non("Moins de 4 semaines ?") == True:
+                    f["grossesse_sem"] = GROSSESSE_EXAMPLE_LT4
+                elif demander_oui_non("Entre 4 et 12 semaines ?") == True:
+                    f["grossesse_sem"] = GROSSESSE_EXAMPLE_4_12
+                else:
+                    f["grossesse_sem"] = GROSSESSE_EXAMPLE_GT12
+            i += 1
+            continue
+        
         if f[key]:
             i += 1
             continue
@@ -329,8 +645,12 @@ def chatbot_cephalees():
             print(f"  - {k}")
 
     print("\nRECOMMANDATION FINALE")
-    print(decision_imagerie(f))
+    decision = decision_imagerie(f)
+    print(decision)
     afficher_contraindications(f)
+
+    # Récupérer le texte des contre-indications
+    contraindications_text = get_contraindications_text(f)
 
     # Construire un rapport texte récapitulatif 
     now = datetime.now()
@@ -364,19 +684,31 @@ def chatbot_cephalees():
 
     body.append("")
     body.append("RECOMMANDATION :")
-    body.append(decision_imagerie(f))
+    body.append(decision)
 
     body.append("")
     body.append("CONTRE-INDICATIONS / REMARQUES :")
-    body.append(get_contraindications_text(f))
+    body.append(contraindications_text)
 
     report_text = "\n".join(hdr + ["\n"] + body)
 
+    # Générer l'ordonnance médicale
+    ordonnance_text = generer_ordonnance(f, texte, decision, contraindications_text)
+
     # Proposer l'enregistrement/impression
-    if demander_oui_non("Voulez-vous imprimer le résultat"):
+    print("\n")
+    if demander_oui_non("Voulez-vous enregistrer le rapport récapitulatif"):
         fname = input("Nom du fichier (laisser vide pour générer automatiquement) : ").strip()
         saved_path = save_report(report_text, fname if fname else None)
         print(f"Rapport enregistré : {saved_path}")
+    
+    # Toujours générer l'ordonnance
+    print("\n")
+    if demander_oui_non("Voulez-vous générer l'ordonnance médicale"):
+        fname_ordonnance = input("Nom de l'ordonnance (laisser vide pour générer automatiquement) : ").strip()
+        saved_ordonnance = save_ordonnance(ordonnance_text, fname_ordonnance if fname_ordonnance else None)
+        print(f"Ordonnance enregistrée : {saved_ordonnance}")
+        print("\n⚠️  IMPORTANT : Cette ordonnance doit être revue et validée par le médecin prescripteur.")
 
 if __name__ == "__main__":
     chatbot_cephalees()
