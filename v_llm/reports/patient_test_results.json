@@ -1,0 +1,107 @@
+{
+  "test_runs": [
+    {
+      "test_run_id": "20251115_173609",
+      "timestamp": "2025-11-15T17:36:09.640859",
+      "total_cases": 5,
+      "results": [
+        {
+          "case_id": 1,
+          "description": "Patient 35 ans, céphalée brutale, fièvre 39°C, raideur nuque",
+          "category": "neurologie",
+          "severity": "high",
+          "actual_response": "Recommandation: Prise en charge urgente en neurologie. Examens complémentaires nécessaires.",
+          "response_time": 0.23334670066833496,
+          "format_valid": true,
+          "keyword_score": 0.0,
+          "format_matches": true,
+          "overall_score": 0.3,
+          "passed": false
+        },
+        {
+          "case_id": 2,
+          "description": "Patient 28 ans enceinte 32SA, céphalée, HTA 180/110",
+          "category": "obstétrique",
+          "severity": "high",
+          "actual_response": "Recommandation: Prise en charge urgente en obstétrique. Examens complémentaires nécessaires.",
+          "response_time": 0.2458810806274414,
+          "format_valid": true,
+          "keyword_score": 0.25,
+          "format_matches": true,
+          "overall_score": 0.475,
+          "passed": false
+        },
+        {
+          "case_id": 3,
+          "description": "Patient 45 ans, traumatisme crânien, Glasgow 13",
+          "category": "traumatologie",
+          "severity": "medium",
+          "actual_response": "Recommandation: Consultation traumatologie programmée. Surveillance clinique.",
+          "response_time": 0.21523642539978027,
+          "format_valid": true,
+          "keyword_score": 0.3333333333333333,
+          "format_matches": true,
+          "overall_score": 0.5333333333333333,
+          "passed": false
+        },
+        {
+          "case_id": 4,
+          "description": "Patient 70 ans, céphalée chronique, AVC antérieur",
+          "category": "neurologie",
+          "severity": "medium",
+          "actual_response": "Pour préciser: Depuis quand ? | Antécédents ? | Signes associés ?",
+          "response_time": 0.2238452434539795,
+          "format_valid": true,
+          "keyword_score": 0.3333333333333333,
+          "format_matches": true,
+          "overall_score": 0.5333333333333333,
+          "passed": false
+        },
+        {
+          "case_id": 5,
+          "description": "Patient jeune, céphalée floue",
+          "category": "général",
+          "severity": "low",
+          "actual_response": "Pour préciser: Depuis quand ? | Antécédents ? | Signes associés ?",
+          "response_time": 0.23786711692810059,
+          "format_valid": true,
+          "keyword_score": 0.0,
+          "format_matches": true,
+          "overall_score": 0.3,
+          "passed": false
+        }
+      ],
+      "summary": {
+        "passed": 0,
+        "failed": 5,
+        "problematic": 5
+      }
+    }
+  ],
+  "statistics": {
+    "neurologie": {
+      "total": 2,
+      "passed": 0,
+      "failed": 2
+    },
+    "obstétrique": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    "traumatologie": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    "général": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    "global": {
+      "total_runs": 1,
+      "avg_success_rate": 0.0
+    }
+  }
+}

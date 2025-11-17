@@ -1,0 +1,50 @@
+{
+  "cases": [
+    {
+      "timestamp": "2025-11-15T17:36:09.874206",
+      "case_description": "Patient 35 ans, céphalée brutale, fièvre 39°C, raideur nuque",
+      "expected_response": "Format: Recommandation:, Mots-clés: ['méningite', 'ponction lombaire', 'urgence', 'antibiotique']",
+      "actual_response": "Recommandation: Prise en charge urgente en neurologie. Examens complémentaires nécessaires.",
+      "error_type": "keyword_mismatch",
+      "accuracy_score": 0.3,
+      "test_run_id": "20251115_173609"
+    },
+    {
+      "timestamp": "2025-11-15T17:36:10.120087",
+      "case_description": "Patient 28 ans enceinte 32SA, céphalée, HTA 180/110",
+      "expected_response": "Format: Recommandation:, Mots-clés: ['pré-éclampsie', 'grossesse', 'surveillance', 'obstétrique']",
+      "actual_response": "Recommandation: Prise en charge urgente en obstétrique. Examens complémentaires nécessaires.",
+      "error_type": "keyword_mismatch",
+      "accuracy_score": 0.475,
+      "test_run_id": "20251115_173609"
+    },
+    {
+      "timestamp": "2025-11-15T17:36:10.335323",
+      "case_description": "Patient 45 ans, traumatisme crânien, Glasgow 13",
+      "expected_response": "Format: Recommandation:, Mots-clés: ['scanner', 'surveillance', 'neurochirurgie']",
+      "actual_response": "Recommandation: Consultation traumatologie programmée. Surveillance clinique.",
+      "error_type": "keyword_mismatch",
+      "accuracy_score": 0.5333333333333333,
+      "test_run_id": "20251115_173609"
+    },
+    {
+      "timestamp": "2025-11-15T17:36:10.559169",
+      "case_description": "Patient 70 ans, céphalée chronique, AVC antérieur",
+      "expected_response": "Format: Pour préciser:, Mots-clés: ['imagerie', 'neurologie', 'antécédents']",
+      "actual_response": "Pour préciser: Depuis quand ? | Antécédents ? | Signes associés ?",
+      "error_type": "keyword_mismatch",
+      "accuracy_score": 0.5333333333333333,
+      "test_run_id": "20251115_173609"
+    },
+    {
+      "timestamp": "2025-11-15T17:36:10.797036",
+      "case_description": "Patient jeune, céphalée floue",
+      "expected_response": "Format: Pour préciser:, Mots-clés: ['précisions', 'anamnèse']",
+      "actual_response": "Pour préciser: Depuis quand ? | Antécédents ? | Signes associés ?",
+      "error_type": "keyword_mismatch",
+      "accuracy_score": 0.3,
+      "test_run_id": "20251115_173609"
+    }
+  ],
+  "last_update": "2025-11-15T17:36:22.216285"
+}
